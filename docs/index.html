@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>DearSunday Homestay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+:root{
+  --bg:#f3f6f6; --surface:#ffffff; --fg:#14262b; --muted:#5b6e73; --line:#dbe4e5;
+  --accent:#0f6b6f; --accent-fg:#ffffff; --accent-soft:#dff0ef;
+  --good:#1f7a4d; --good-soft:#dcf1e5; --warn:#8a5a00; --warn-soft:#fbecc8; --bad:#a8322b; --bad-soft:#f9dedb;
+  --font:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',sans-serif; --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1a1d; --surface:#16272b; --fg:#e4eeee; --muted:#93a9ad; --line:#26393e;
+  --accent:#4fc0c4; --accent-fg:#06202a; --accent-soft:#183a3d;
+  --good:#6fd39b; --good-soft:#173a2a; --warn:#f0c766; --warn-soft:#3d3113; --bad:#f18b83; --bad-soft:#3f1d1a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1a1d; --surface:#16272b; --fg:#e4eeee; --muted:#93a9ad; --line:#26393e;
+  --accent:#4fc0c4; --accent-fg:#06202a; --accent-soft:#183a3d;
+  --good:#6fd39b; --good-soft:#173a2a; --warn:#f0c766; --warn-soft:#3d3113; --bad:#f18b83; --bad-soft:#3f1d1a; color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.5;padding-inline:16px}
+.wrap{max-width:920px;margin-inline:auto}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding-block:12px 8px;border-bottom:1px solid var(--line);margin-inline:-16px;padding-inline:16px}
+header .in{max-width:920px;margin-inline:auto;display:grid;gap:8px}
+h1{font-size:17px;margin:0;font-weight:700;letter-spacing:-.01em}
+nav{display:flex;gap:4px;overflow-x:auto;padding-bottom:2px}
+nav button{font:inherit;font-weight:500;border:0;background:transparent;color:var(--muted);padding:7px 12px;border-radius:6px;cursor:pointer;white-space:nowrap}
+nav button[aria-selected="true"]{background:var(--accent);color:var(--accent-fg)}
+nav button:hover:not([aria-selected="true"]){background:var(--accent-soft);color:var(--fg)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{padding-block:20px 48px;display:grid;gap:20px}
+h2{font-size:20px;margin:0;letter-spacing:-.01em}
+h3{font-size:14px;margin:0 0 8px}
+.note{background:var(--warn-soft);color:var(--warn);padding:8px 12px;border-radius:6px;font-size:12.5px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;min-width:0}
+.stack{display:grid;gap:14px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+.stat{padding:14px 16px;border-radius:8px;background:var(--surface);border:1px solid var(--line);text-align:left;font:inherit;color:inherit;cursor:pointer}
+.stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stat span{color:var(--muted);font-size:12.5px}
+.stat:hover{border-color:var(--accent)}
+form.row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+label.f{display:grid;gap:4px;font-size:12px;color:var(--muted);font-weight:500;min-width:0;flex:1 1 150px}
+input[type=text],input[type=number],input[type=email],input[type=datetime-local],select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;min-width:0}
+textarea{resize:vertical}
+.btn{font:inherit;font-weight:600;background:var(--accent);color:var(--accent-fg);border:0;border-radius:6px;padding:9px 14px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--line);padding:6px 11px;font-weight:500;font-size:13px}
+.btn.x{background:transparent;color:var(--muted);border:0;padding:4px 8px;font-size:18px;line-height:1}
+.btn.x:hover{color:var(--bad)}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px;width:max-content;max-width:100%}
+.seg button{font:inherit;font-weight:600;border:0;background:transparent;color:var(--muted);padding:7px 16px;border-radius:6px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+.list{display:grid}
+.li{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.li:last-child{border-bottom:0}
+.li .name{flex:1 1 160px;min-width:0;font-weight:500;overflow-wrap:anywhere}
+.li.lost .name{text-decoration:line-through;color:var(--muted)}
+.chk{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--muted);user-select:none}
+.chk input{width:18px;height:18px;accent-color:var(--accent);margin:0}
+.chk.big{font-size:14px;color:var(--fg)}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
+.good{background:var(--good-soft);color:var(--good)}.warn{background:var(--warn-soft);color:var(--warn)}.bad{background:var(--bad-soft);color:var(--bad)}.mute{background:var(--accent-soft);color:var(--muted)}
+.inc{color:var(--good)}.exp{color:var(--bad)}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:520px}
+th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.code{font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:.08em}
+.muted{color:var(--muted)}
+.split{display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.res{border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:grid;gap:4px;margin-top:10px}
+.mail{white-space:pre-wrap;font-size:12.5px;background:var(--bg);border-radius:6px;padding:10px 12px;border:1px dashed var(--line);margin-top:10px}
+.empty{color:var(--muted);padding:10px 0}
+.bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.noteitem{padding:12px 0;border-bottom:1px solid var(--line);display:flex;gap:10px;justify-content:space-between;align-items:flex-start}
+.noteitem:last-child{border-bottom:0}
+.noteitem p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.noteitem small{color:var(--muted)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header><div class="in">
+  <h1>DearSunday Homestay</h1>
+  <nav role="tablist" id="tabs">
+    <button role="tab" data-t="home" aria-selected="true">Tổng quan</button>
+    <button role="tab" data-t="items" aria-selected="false">Đồ đạc và cây</button>
+    <button role="tab" data-t="clean" aria-selected="false">Dọn phòng</button>
+    <button role="tab" data-t="guests" aria-selected="false">Khách hàng</button>
+    <button role="tab" data-t="fin" aria-selected="false">Tài chính</button>
+    <button role="tab" data-t="notes" aria-selected="false">Ghi chú</button>
+  </nav>
+</div></header>
+
+<div class="wrap"><main>
+  <div class="note">Dữ liệu lưu ngay trên trình duyệt của thiết bị này, không đồng bộ giữa điện thoại và máy tính. Kiểm tra AI chạy theo quy tắc đơn giản; mã khóa và email chỉ là giả lập.</div>
+
+  <section id="home"></section>
+
+  <section id="items" hidden><div class="stack">
+    <div class="bar"><h2>Đồ đạc và cây</h2>
+      <div class="seg" role="group" aria-label="Chuyển danh sách">
+        <button id="vPlants" data-view="plants" aria-pressed="true">Cây</button>
+        <button id="vToys" data-view="toys" aria-pressed="false">List đồ nhỏ</button>
+      </div>
+    </div>
+    <div id="plantsView" class="stack"></div>
+    <div id="toysView" class="stack" hidden></div>
+  </div></section>
+
+  <section id="clean" hidden><div class="stack" id="cleanView"></div></section>
+
+  <section id="guests" hidden><div class="stack">
+    <h2>Khách hàng</h2>
+    <form class="panel row" id="guestForm">
+      <label class="f" style="flex:2 1 200px">Họ tên<input type="text" id="gName" required placeholder="Nguyễn Văn A"></label>
+      <label class="f">Số điện thoại<input type="text" id="gPhone" required placeholder="0912345678"></label>
+      <button class="btn">Thêm khách</button>
+    </form>
+    <div class="panel tw" id="guestList"></div>
+    <div id="guestDetail"></div>
+  </div></section>
+
+  <section id="fin" hidden><div class="stack">
+    <h2>Tài chính</h2>
+    <div class="grid" id="finStats"></div>
+    <form class="panel row" id="txForm">
+      <label class="f" style="flex:0 1 110px">Loại<select id="tType"><option value="INCOME">Thu</option><option value="EXPENSE">Chi</option></select></label>
+      <label class="f">Danh mục<input type="text" id="tCat" required placeholder="Tiền phòng"></label>
+      <label class="f">Số tiền (đ)<input type="number" id="tAmt" min="1" required></label>
+      <label class="f" style="flex:2 1 180px">Ghi chú<input type="text" id="tDesc"></label>
+      <button class="btn">Ghi nhận</button>
+    </form>
+    <div class="panel tw" id="txList"></div>
+  </div></section>
+
+  <section id="notes" hidden><div class="stack">
+    <h2>Ghi chú</h2>
+    <form class="panel" id="noteForm" style="display:grid;gap:10px">
+      <label class="f">Nội dung<textarea id="nText" rows="3" required placeholder="Ví dụ: khách phòng sau xin check-in sớm, thay bóng đèn hành lang"></textarea></label>
+      <div><button class="btn">Lưu ghi chú</button></div>
+    </form>
+    <div class="panel" id="noteList"></div>
+  </div></section>
+</main></div>
+
+<script>
+var KEY='dearsunday-v2', DAY=86400000, H=3600000;
+var now0=Date.now();
+function seed(){return{
+  plants:[
+    {id:'p1',name:'Trầu bà cạnh cửa sổ',days:2},
+    {id:'p2',name:'Sen đá bàn làm việc',days:2},
+    {id:'p3',name:'Lưỡi hổ góc phòng',days:2},
+    {id:'p4',name:'Rau mầm ban công',days:1}
+  ],
+  water:now0-30*H,
+  toys:[
+    {id:'o1',name:'Bộ Jenga',empty:false,lost:false},
+    {id:'o2',name:'Bài Uno',empty:true,lost:false},
+    {id:'o3',name:'Cờ cá ngựa',empty:false,lost:false},
+    {id:'o4',name:'Bình xịt thơm phòng',empty:false,lost:false}
+  ],
+  clean:{last:now0-2*DAY,tasks:[
+    {id:'c1',text:'Thay ga giường và vỏ gối',done:false},
+    {id:'c2',text:'Hút bụi và lau sàn',done:false},
+    {id:'c3',text:'Dọn và cọ nhà vệ sinh',done:false},
+    {id:'c4',text:'Đổ rác, thay túi rác mới',done:false},
+    {id:'c5',text:'Lau bàn, gương, mặt kính',done:false},
+    {id:'c6',text:'Bổ sung khăn, nước, đồ dùng cá nhân',done:false}
+  ]},
+  notes:[],
+  guests:[
+    {id:'g1',name:'Trần Minh Anh',phone:'0987654321',status:'VERIFIED',ver:[{risk:'LOW',sum:'Không phát hiện dấu hiệu bất thường rõ ràng từ hồ sơ và số điện thoại đã cung cấp. Vẫn nên đối chiếu thêm khi khách nhận phòng.',at:now0-DAY}],codes:[]}
+  ],
+  tx:[
+    {id:'t1',type:'INCOME',cat:'Tiền phòng',amt:1200000,desc:'Trần Minh Anh, 2 đêm',at:now0-3*DAY},
+    {id:'t2',type:'EXPENSE',cat:'Điện nước',amt:350000,desc:'',at:now0-2*DAY}
+  ]}}
+var S=null;
+try{S=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){S=null}
+if(!S||!S.plants)S=seed();
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+var $=function(s){return document.querySelector(s)};
+var uid=function(){return 'x'+Math.random().toString(36).slice(2,9)};
+var money=function(n){return n.toLocaleString('vi-VN')+'đ'};
+var dt=function(t){return new Date(t).toLocaleString('vi-VN',{dateStyle:'short',timeStyle:'short'})};
+var esc=function(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+var ST={PENDING:['Chờ kiểm tra','mute'],VERIFIED:['Đã xác minh','good'],FLAGGED:['Cảnh báo','bad']};
+var RK={LOW:['Rủi ro thấp','good'],MEDIUM:['Rủi ro trung bình','warn'],HIGH:['Rủi ro cao','bad']};
+var openGuest=null, lastMail={}, view='plants';
+
+function span(ms){var h=Math.round(Math.abs(ms)/H);return h>=48?Math.round(h/24)+' ngày':h+' giờ'}
+function plantDue(p){return !S.water||S.water+p.days*DAY<=Date.now()}
+function plantText(p){
+  if(!S.water)return 'Chưa tưới';
+  var d=S.water+p.days*DAY-Date.now();
+  return d<=0?'Cần tưới, quá '+span(d):'Còn '+span(d);
+}
+function ago(t){if(!t)return 'Chưa có';var d=Date.now()-t;return d<H?'Vừa xong':span(d)+' trước'}
+
+function renderHome(){
+  var pd=S.plants.filter(plantDue).length;
+  var te=S.toys.filter(function(t){return t.empty}).length, tl=S.toys.filter(function(t){return t.lost}).length;
+  var open=S.clean.tasks.filter(function(t){return !t.done}).length;
+  var inc=0,exp=0;S.tx.forEach(function(t){t.type==='INCOME'?inc+=t.amt:exp+=t.amt});
+  var flagged=S.guests.filter(function(g){return g.status==='FLAGGED'}).length;
+  var st=function(v,l,t,vw){return '<button class="stat" data-go="'+t+'"'+(vw?' data-goview="'+vw+'"':'')+'><b>'+v+'</b><span>'+l+'</span></button>'};
+  var todo=[];
+  if(pd)todo.push('<div class="li"><span class="name">Tưới '+pd+' cây đang đến hạn</span><button class="btn ghost" data-act="water">Đã tưới tất cả</button></div>');
+  S.toys.forEach(function(t){
+    if(t.empty)todo.push('<div class="li"><span class="name">'+esc(t.name)+'</span><span class="pill warn">Hết, cần fill</span><button class="btn ghost" data-act="fill" data-id="'+t.id+'">Đã fill</button></div>');
+    if(t.lost)todo.push('<div class="li"><span class="name">'+esc(t.name)+'</span><span class="pill bad">Báo mất</span></div>');
+  });
+  $('#home').innerHTML='<div class="stack"><h2>Tổng quan</h2><div class="grid">'+
+    st(pd,'Cây cần tưới','items','plants')+st(te+tl,'Đồ hết hoặc mất','items','toys')+
+    st(open+'/'+S.clean.tasks.length,'Mục dọn phòng chưa xong','clean')+st(S.guests.length,'Khách','guests')+
+    st(flagged,'Khách bị cảnh báo','guests')+st(money(inc-exp),'Số dư','fin')+
+    '</div><div class="panel"><h3>Việc cần làm ngay</h3>'+(todo.length?'<div class="list">'+todo.join('')+'</div>':'<div class="empty">Không có việc nào cần làm.</div>')+'</div></div>';
+}
+function renderPlants(){
+  var pd=S.plants.filter(plantDue).length;
+  $('#plantsView').innerHTML='<div class="panel bar"><div><h3 style="margin:0">Tưới cây</h3><span class="muted">Lần tưới gần nhất: '+ago(S.water)+(S.water?' ('+dt(S.water)+')':'')+'</span></div>'+
+    '<button class="btn" data-act="water">Đã tưới tất cả cây</button></div>'+
+    '<div class="panel"><div class="list">'+(S.plants.length?S.plants.map(function(p){
+      return '<div class="li"><span class="name">'+esc(p.name)+'</span>'+
+       '<span class="pill '+(plantDue(p)?'bad':'good')+'">'+plantText(p)+'</span>'+
+       '<select data-days="'+p.id+'" aria-label="Lịch tưới '+esc(p.name)+'" style="width:auto"><option value="1"'+(p.days===1?' selected':'')+'>Mỗi ngày</option><option value="2"'+(p.days===2?' selected':'')+'>2 ngày 1 lần</option></select>'+
+       '<button class="btn x" data-act="delplant" data-id="'+p.id+'" aria-label="Xóa '+esc(p.name)+'">×</button></div>'}).join(''):'<div class="empty">Chưa có cây nào.</div>')+'</div></div>'+
+    '<form class="panel row" id="plantForm"><label class="f" style="flex:2 1 200px">Thêm cây<input type="text" id="pName" required placeholder="Tên cây"></label>'+
+    '<label class="f" style="flex:0 1 160px">Lịch tưới<select id="pDays"><option value="2">2 ngày 1 lần</option><option value="1">Mỗi ngày</option></select></label><button class="btn">Thêm</button></form>';
+}
+function renderToys(){
+  $('#toysView').innerHTML='<div class="panel"><div class="list">'+(S.toys.length?S.toys.map(function(t){
+    return '<div class="li'+(t.lost?' lost':'')+'"><span class="name">'+esc(t.name)+'</span>'+
+     (t.lost?'<span class="pill bad">Mất</span>':'<span class="pill '+(t.empty?'warn':'good')+'">'+(t.empty?'Hết':'Đủ')+'</span>')+
+     '<button class="btn ghost" data-act="'+(t.empty?'fill':'empty')+'" data-id="'+t.id+'"'+(t.lost?' disabled':'')+'>'+(t.empty?'Đã fill':'Báo hết')+'</button>'+
+     '<label class="chk"><input type="checkbox" data-lost="'+t.id+'"'+(t.lost?' checked':'')+'> Mất đồ</label>'+
+     '<button class="btn x" data-act="deltoy" data-id="'+t.id+'" aria-label="Xóa '+esc(t.name)+'">×</button></div>'}).join(''):'<div class="empty">Chưa có món nào.</div>')+'</div></div>'+
+    '<form class="panel row" id="toyForm"><label class="f" style="flex:2 1 200px">Thêm đồ nhỏ<input type="text" id="oName" required placeholder="Tên đồ hoặc trò chơi"></label><button class="btn">Thêm</button></form>';
+}
+function renderClean(){
+  var tasks=S.clean.tasks, done=tasks.filter(function(t){return t.done}).length;
+  $('#cleanView').innerHTML='<div class="bar"><h2>Dọn phòng</h2><span class="muted">Dọn lần cuối: '+ago(S.clean.last)+(S.clean.last?' ('+dt(S.clean.last)+')':'')+'</span></div>'+
+   '<div class="panel"><div class="bar" style="margin-bottom:6px"><h3 style="margin:0">Checklist ('+done+'/'+tasks.length+')</h3><button class="btn" data-act="cleandone">Hoàn tất dọn phòng</button></div>'+
+   '<div class="list">'+(tasks.length?tasks.map(function(t){
+     return '<div class="li"><label class="chk big" style="flex:1 1 200px"><input type="checkbox" data-task="'+t.id+'"'+(t.done?' checked':'')+'><span'+(t.done?' class="muted" style="text-decoration:line-through"':'')+'>'+esc(t.text)+'</span></label>'+
+      '<button class="btn x" data-act="deltask" data-id="'+t.id+'" aria-label="Xóa mục">×</button></div>'}).join(''):'<div class="empty">Chưa có mục nào.</div>')+'</div></div>'+
+   '<form class="panel row" id="taskForm"><label class="f" style="flex:2 1 220px">Thêm mục dọn dẹp<input type="text" id="kText" required placeholder="Ví dụ: Lau tủ lạnh mini"></label><button class="btn">Thêm</button></form>';
+}
+function renderNotes(){
+  var rows=S.notes.slice().sort(function(a,b){return b.at-a.at});
+  $('#noteList').innerHTML=rows.length?rows.map(function(n){return '<div class="noteitem"><div><p>'+esc(n.text)+'</p><small>'+dt(n.at)+'</small></div><button class="btn x" data-act="delnote" data-id="'+n.id+'" aria-label="Xóa ghi chú">×</button></div>'}).join(''):'<div class="empty">Chưa có ghi chú nào.</div>';
+}
+function renderGuests(){
+  $('#guestList').innerHTML='<table><thead><tr><th>Tên</th><th>SĐT</th><th>Trạng thái</th><th></th></tr></thead><tbody>'+
+   (S.guests.map(function(g){var s=ST[g.status];return '<tr><td><b>'+esc(g.name)+'</b></td><td>'+esc(g.phone)+'</td><td><span class="pill '+s[1]+'">'+s[0]+'</span></td><td style="text-align:right"><button class="btn ghost" data-guest="'+g.id+'">'+(openGuest===g.id?'Đang xem':'Chi tiết')+'</button></td></tr>'}).join('')||'<tr><td colspan="4" class="empty">Chưa có khách nào.</td></tr>')+'</tbody></table>';
+  var g=S.guests.filter(function(x){return x.id===openGuest})[0], box=$('#guestDetail');
+  if(!g){box.innerHTML='';return}
+  var v=g.ver.slice().reverse().map(function(x){var r=RK[x.risk];return '<div class="res"><div class="bar"><span class="pill '+r[1]+'">'+r[0]+'</span><span class="muted" style="font-size:12px">'+dt(x.at)+'</span></div><div>'+esc(x.sum)+'</div></div>'}).join('')||'<div class="empty">Chưa có lần kiểm tra nào.</div>';
+  var c=g.codes.slice().reverse().map(function(x){return '<div class="res"><span class="code">'+x.code+'</span><span class="muted" style="font-size:12px">Khóa '+esc(x.lock)+' · '+dt(x.from)+' đến '+dt(x.to)+'</span></div>'}).join('')||'<div class="empty">Chưa có mã khóa nào.</div>';
+  box.innerHTML='<div class="split"><div class="panel"><h3>Kiểm tra thông tin '+esc(g.name)+'</h3><p class="muted" style="margin:0 0 10px;font-size:12.5px">Dán profile và số điện thoại để phát hiện dấu hiệu giả mạo, clone hoặc lừa đảo.</p>'+
+   '<form id="verForm" style="display:grid;gap:10px"><label class="f">Profile khách<textarea id="vProf" rows="5" required placeholder="Dán profile vào đây"></textarea></label><label class="f">Số điện thoại<input type="text" id="vPhone" value="'+esc(g.phone)+'" required></label><button class="btn">Kiểm tra ngay</button></form>'+v+'</div>'+
+   '<div class="panel"><h3>Tạo mã khóa thông minh</h3><form id="codeForm" style="display:grid;gap:10px"><label class="f">ID thiết bị khóa<input type="text" id="cLock" required value="lock-sunday-01"></label><label class="f">Email khách<input type="email" id="cMail" placeholder="khach@example.com"></label><label class="f">Hiệu lực từ<input type="datetime-local" id="cFrom" required></label><label class="f">Đến<input type="datetime-local" id="cTo" required></label><button class="btn">Tạo mã và gửi email</button></form>'+c+(lastMail[g.id]?'<div class="mail">'+esc(lastMail[g.id])+'</div>':'')+'</div></div>';
+  var pad=function(d){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)};
+  $('#cFrom').value=pad(new Date());$('#cTo').value=pad(new Date(Date.now()+2*DAY));
+}
+function renderFin(){
+  var inc=0,exp=0;S.tx.forEach(function(t){t.type==='INCOME'?inc+=t.amt:exp+=t.amt});
+  var st=function(l,v,c){return '<div class="stat" style="cursor:default"><span>'+l+'</span><b class="'+c+'">'+money(v)+'</b></div>'};
+  $('#finStats').innerHTML=st('Tổng thu',inc,'inc')+st('Tổng chi',exp,'exp')+st('Số dư',inc-exp,'');
+  var rows=S.tx.slice().sort(function(a,b){return b.at-a.at});
+  $('#txList').innerHTML='<table><thead><tr><th>Ngày</th><th>Loại</th><th>Danh mục</th><th>Ghi chú</th><th class="num">Số tiền</th></tr></thead><tbody>'+
+   rows.map(function(t){var i=t.type==='INCOME';return '<tr><td>'+new Date(t.at).toLocaleDateString('vi-VN')+'</td><td><span class="pill '+(i?'good':'bad')+'">'+(i?'Thu':'Chi')+'</span></td><td>'+esc(t.cat)+'</td><td class="muted">'+(esc(t.desc)||'—')+'</td><td class="num '+(i?'inc':'exp')+'">'+(i?'+':'-')+money(t.amt)+'</td></tr>'}).join('')+'</tbody></table>';
+}
+function setView(v){
+  view=v;
+  $('#plantsView').hidden=v!=='plants';$('#toysView').hidden=v!=='toys';
+  $('#vPlants').setAttribute('aria-pressed',v==='plants');$('#vToys').setAttribute('aria-pressed',v==='toys');
+}
+function renderAll(){renderHome();renderPlants();renderToys();renderClean();renderNotes();renderGuests();renderFin()}
+function show(t){
+  ['home','items','clean','guests','fin','notes'].forEach(function(id){$('#'+id).hidden=id!==t});
+  document.querySelectorAll('#tabs button').forEach(function(b){b.setAttribute('aria-selected',b.dataset.t===t)});
+  window.scrollTo(0,0);
+}
+function find(list,id){return list.filter(function(x){return x.id===id})[0]}
+function drop(list,id){return list.filter(function(x){return x.id!==id})}
+
+function verify(text,phone){
+  var why=[],sc=0,p=phone.replace(/\s+/g,'');
+  if(!/^(0|\+84)\d{9,10}$/.test(p)){why.push('Số điện thoại không đúng định dạng Việt Nam');sc+=2}
+  var q=p.replace(/^\+84/,'0');
+  if(/^0{6,}/.test(q)||/^(\d)\1{6,}$/.test(q)||/^1234567/.test(q)){why.push('Số điện thoại có mẫu lặp hoặc bất thường');sc+=3}
+  if(text.trim().length<20){why.push('Hồ sơ quá sơ sài để đối chiếu');sc+=2}
+  if(/http:\/\/|bit\.ly|zalo\.me\/g\//i.test(text)){why.push('Hồ sơ chứa liên kết rút gọn hoặc đáng ngờ');sc+=2}
+  if(/mới tạo|new account|0 bạn bè|0 friends/i.test(text)){why.push('Có dấu hiệu tài khoản mới tạo, ít hoạt động (nghi clone)');sc+=3}
+  return{risk:sc>=5?'HIGH':sc>=2?'MEDIUM':'LOW',sum:why.length?'Phát hiện '+why.length+' dấu hiệu cần lưu ý: '+why.join('; ')+'.':'Không phát hiện dấu hiệu bất thường rõ ràng từ hồ sơ và số điện thoại đã cung cấp. Vẫn nên đối chiếu thêm khi khách nhận phòng.',at:Date.now()};
+}
+
+document.addEventListener('click',function(e){
+  var t=e.target.closest('[data-t],[data-go],[data-act],[data-guest],[data-view]');if(!t)return;
+  var d=t.dataset, id=d.id;
+  if(d.t){show(d.t);return}
+  if(d.go){show(d.go);if(d.goview)setView(d.goview);return}
+  if(d.view){setView(d.view);return}
+  if(d.guest){openGuest=d.guest;renderGuests();return}
+  switch(d.act){
+    case 'water':S.water=Date.now();break;
+    case 'delplant':S.plants=drop(S.plants,id);break;
+    case 'fill':find(S.toys,id).empty=false;break;
+    case 'empty':find(S.toys,id).empty=true;break;
+    case 'deltoy':S.toys=drop(S.toys,id);break;
+    case 'deltask':S.clean.tasks=drop(S.clean.tasks,id);break;
+    case 'cleandone':S.clean.last=Date.now();S.clean.tasks.forEach(function(x){x.done=false});break;
+    case 'delnote':S.notes=drop(S.notes,id);break;
+    default:return;
+  }
+  save();renderAll();
+});
+document.addEventListener('change',function(e){
+  var t=e.target;
+  if(t.dataset.days){find(S.plants,t.dataset.days).days=+t.value}
+  else if(t.dataset.lost){find(S.toys,t.dataset.lost).lost=t.checked}
+  else if(t.dataset.task){find(S.clean.tasks,t.dataset.task).done=t.checked}
+  else return;
+  save();renderAll();
+});
+function onSubmit(sel,fn){$(sel).addEventListener('submit',function(e){e.preventDefault();fn();save();renderAll()})}
+onSubmit('#noteForm',function(){S.notes.push({id:uid(),text:$('#nText').value.trim(),at:Date.now()});$('#nText').value=''});
+onSubmit('#guestForm',function(){var g={id:uid(),name:$('#gName').value.trim(),phone:$('#gPhone').value.trim(),status:'PENDING',ver:[],codes:[]};S.guests.unshift(g);openGuest=g.id;$('#gName').value='';$('#gPhone').value=''});
+onSubmit('#txForm',function(){S.tx.push({id:uid(),type:$('#tType').value,cat:$('#tCat').value.trim(),amt:+$('#tAmt').value,desc:$('#tDesc').value.trim(),at:Date.now()});$('#tCat').value='';$('#tAmt').value='';$('#tDesc').value=''});
+// these forms are re-rendered, so bind by delegation
+['#plantsView','#toysView','#cleanView'].forEach(function(sel){
+  $(sel).addEventListener('submit',function(e){
+    e.preventDefault();var f=e.target.id;
+    if(f==='plantForm')S.plants.push({id:uid(),name:$('#pName').value.trim(),days:+$('#pDays').value});
+    else if(f==='toyForm')S.toys.push({id:uid(),name:$('#oName').value.trim(),empty:false,lost:false});
+    else if(f==='taskForm')S.clean.tasks.push({id:uid(),text:$('#kText').value.trim(),done:false});
+    save();renderAll();
+  });
+});
+$('#guestDetail').addEventListener('submit',function(e){
+  e.preventDefault();
+  var g=find(S.guests,openGuest);if(!g)return;
+  if(e.target.id==='verForm'){
+    var r=verify($('#vProf').value,$('#vPhone').value);
+    g.phone=$('#vPhone').value.trim();g.ver.push(r);g.status=r.risk==='HIGH'?'FLAGGED':'VERIFIED';
+  }else if(e.target.id==='codeForm'){
+    var code=String(Math.floor(100000+Math.random()*900000)),from=new Date($('#cFrom').value).getTime(),to=new Date($('#cTo').value).getTime();
+    g.codes.push({code:code,lock:$('#cLock').value.trim(),from:from,to:to});
+    var mail=$('#cMail').value.trim();
+    lastMail[g.id]=mail?('Đã gửi tới '+mail+' (giả lập)\nTiêu đề: Mã khóa cửa homestay của bạn\n\nXin chào '+g.name+',\nMã khóa cửa của bạn là: '+code+'\nHiệu lực từ '+dt(from)+' đến '+dt(to)+'.\nVui lòng không chia sẻ mã này cho người khác.\n\nDearSunday Homestay'):'';
+  }
+  save();renderAll();
+});
+renderAll();
+</script>
+</body>
+</html>
