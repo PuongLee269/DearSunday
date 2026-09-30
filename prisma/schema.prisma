@@ -1,0 +1,134 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Đồ đạc / trò chơi cần refill / cây cần tưới trong phòng homestay
+model Item {
+  id            String   @id @default(cuid())
+  name          String
+  category      ItemCategory
+  notes         String?
+  // Khoảng thời gian (giờ) giữa 2 lần chăm sóc, ví dụ tưới cây mỗi 48h, refill trò chơi mỗi 72h
+  intervalHours Int
+  lastCaredAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  careLogs      CareLog[]
+}
+
+enum ItemCategory {
+  FURNITURE // đồ đạc nhỏ
+  GAME      // trò chơi cần refill
+  PLANT     // cây cần tưới
+  OTHER
+}
+
+model CareLog {
+  id        String   @id @default(cuid())
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId    String
+  note      String?
+  doneAt    DateTime @default(now())
+  doneBy    String?
+}
+
+/// Khách hàng đặt phòng
+model Guest {
+  id            String   @id @default(cuid())
+  fullName      String
+  phone         String
+  idNumber      String?
+  profileText   String?  // nội dung profile khách dán vào box chat
+  checkInAt     DateTime?
+  checkOutAt    DateTime?
+  status        GuestStatus @default(PENDING)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  verifications GuestVerification[]
+  accessCodes   AccessCode[]
+  transactions  Transaction[]
+  emailLogs     EmailLog[]
+}
+
+enum GuestStatus {
+  PENDING
+  VERIFIED
+  FLAGGED
+  CHECKED_IN
+  CHECKED_OUT
+}
+
+/// Kết quả kiểm tra thông tin khách bằng AI (chống lừa đảo / giả mạo)
+model GuestVerification {
+  id           String   @id @default(cuid())
+  guest        Guest    @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  guestId      String
+  inputProfile String
+  inputPhone   String
+  riskLevel    RiskLevel
+  summary      String
+  rawResponse  String?
+  createdAt    DateTime @default(now())
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  UNKNOWN
+}
+
+/// Thu chi tài chính
+model Transaction {
+  id          String   @id @default(cuid())
+  type        TransactionType
+  category    String
+  amount      Float
+  description String?
+  guest       Guest?   @relation(fields: [guestId], references: [id])
+  guestId     String?
+  occurredAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+/// Mã khóa cửa thông minh cấp cho khách
+model AccessCode {
+  id          String   @id @default(cuid())
+  guest       Guest    @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  guestId     String
+  code        String
+  lockDeviceId String
+  externalId  String?  // id trả về từ API ổ khóa
+  validFrom   DateTime
+  validTo     DateTime
+  status      AccessCodeStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+}
+
+enum AccessCodeStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+/// Lịch sử email tự động gửi khách
+model EmailLog {
+  id        String   @id @default(cuid())
+  guest     Guest    @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  guestId   String
+  subject   String
+  body      String
+  status    String
+  sentAt    DateTime @default(now())
+}
