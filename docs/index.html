@@ -97,11 +97,12 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <button role="tab" data-t="guests" aria-selected="false">Khách hàng</button>
     <button role="tab" data-t="fin" aria-selected="false">Tài chính</button>
     <button role="tab" data-t="notes" aria-selected="false">Ghi chú</button>
+    <button role="tab" data-t="sync" aria-selected="false">Đồng bộ</button>
   </nav>
 </div></header>
 
 <div class="wrap"><main>
-  <div class="note">Dữ liệu lưu ngay trên trình duyệt của thiết bị này, không đồng bộ giữa điện thoại và máy tính. Kiểm tra AI chạy theo quy tắc đơn giản; mã khóa và email chỉ là giả lập.</div>
+  <div class="note">Dữ liệu lưu ngay trên trình duyệt của thiết bị này. Vào tab <b>Đồng bộ</b> để chia sẻ dữ liệu giữa điện thoại và máy tính. Kiểm tra AI chạy theo quy tắc đơn giản; mã khóa và email chỉ là giả lập.</div>
 
   <section id="home"></section>
 
@@ -149,6 +150,25 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       <div><button class="btn">Lưu ghi chú</button></div>
     </form>
     <div class="panel" id="noteList"></div>
+  </div></section>
+
+  <section id="sync" hidden><div class="stack">
+    <h2>Đồng bộ giữa các máy</h2>
+    <div class="panel stack">
+      <p class="muted" style="margin:0">Dùng một GitHub Gist riêng tư làm nơi lưu chung. Cần một Personal Access Token (GitHub → Settings → Developer settings → Fine-grained tokens hoặc Tokens classic, chỉ cần quyền <b>gist</b>). Token chỉ lưu trên trình duyệt này, chỉ được gửi tới api.github.com.</p>
+      <label class="f">Personal Access Token<input type="text" id="syToken" placeholder="ghp_..." autocomplete="off"></label>
+      <label class="f">Gist ID (để trống nếu tạo lần đầu)<input type="text" id="syGist" placeholder="tự điền sau khi đẩy lên lần đầu"></label>
+      <div class="bar">
+        <button class="btn" id="syPush">Đẩy dữ liệu máy này lên</button>
+        <button class="btn ghost" id="syPull">Tải dữ liệu chung về máy này</button>
+      </div>
+      <div id="syConfirm" hidden class="li" style="border:1px dashed var(--bad);border-radius:6px;padding:10px">
+        <span class="name">Việc này sẽ ghi đè toàn bộ dữ liệu trên máy này. Tiếp tục?</span>
+        <button class="btn" id="syPullYes">Đồng ý, ghi đè</button>
+        <button class="btn ghost" id="syPullNo">Hủy</button>
+      </div>
+      <div id="syStatus" class="muted" style="font-size:12.5px"></div>
+    </div>
   </div></section>
 </main></div>
 
@@ -288,7 +308,7 @@ function setView(v){
 }
 function renderAll(){renderHome();renderPlants();renderToys();renderClean();renderNotes();renderGuests();renderFin()}
 function show(t){
-  ['home','items','clean','guests','fin','notes'].forEach(function(id){$('#'+id).hidden=id!==t});
+  ['home','items','clean','guests','fin','notes','sync'].forEach(function(id){$('#'+id).hidden=id!==t});
   document.querySelectorAll('#tabs button').forEach(function(b){b.setAttribute('aria-selected',b.dataset.t===t)});
   window.scrollTo(0,0);
 }
@@ -362,6 +382,59 @@ $('#guestDetail').addEventListener('submit',function(e){
   }
   save();renderAll();
 });
+var SYNC_FILE='dearsunday-data.json', SYNC_TOKEN_KEY='dearsunday-sync-token', SYNC_GIST_KEY='dearsunday-sync-gist';
+function syStatus(msg,tone){var el=$('#syStatus');el.textContent=msg;el.style.color=tone==='bad'?'var(--bad)':tone==='good'?'var(--good)':''}
+function initSync(){
+  try{
+    $('#syToken').value=localStorage.getItem(SYNC_TOKEN_KEY)||'';
+    $('#syGist').value=localStorage.getItem(SYNC_GIST_KEY)||'';
+  }catch(e){}
+}
+function syCreds(){
+  var token=$('#syToken').value.trim(), gist=$('#syGist').value.trim();
+  try{localStorage.setItem(SYNC_TOKEN_KEY,token);localStorage.setItem(SYNC_GIST_KEY,gist)}catch(e){}
+  return{token:token,gist:gist};
+}
+function ghHeaders(token){return{authorization:'token '+token,accept:'application/vnd.github+json','content-type':'application/json'}}
+$('#syPush').addEventListener('click',function(){
+  var c=syCreds();
+  if(!c.token){syStatus('Cần nhập Personal Access Token trước.','bad');return}
+  syStatus('Đang đẩy dữ liệu lên...');
+  var body=JSON.stringify({description:'DearSunday Homestay data',public:false,files:{}});
+  var payload={description:'DearSunday Homestay data',public:false,files:{}};
+  payload.files[SYNC_FILE]={content:JSON.stringify(S,null,2)};
+  var url=c.gist?('https://api.github.com/gists/'+c.gist):'https://api.github.com/gists';
+  fetch(url,{method:c.gist?'PATCH':'POST',headers:ghHeaders(c.token),body:JSON.stringify(payload)})
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
+    .then(function(data){
+      if(!c.gist){$('#syGist').value=data.id;try{localStorage.setItem(SYNC_GIST_KEY,data.id)}catch(e){}}
+      syStatus('Đã đẩy lên lúc '+dt(Date.now())+'. Dùng cùng Token và Gist ID này trên máy kia để tải về.','good');
+    })
+    .catch(function(err){syStatus('Đẩy lên thất bại: '+err.message+'. Kiểm tra lại Token (cần quyền gist).','bad')});
+});
+$('#syPull').addEventListener('click',function(){
+  var c=syCreds();
+  if(!c.token||!c.gist){syStatus('Cần nhập Token và Gist ID trước.','bad');return}
+  $('#syConfirm').hidden=false;
+});
+$('#syPullNo').addEventListener('click',function(){$('#syConfirm').hidden=true});
+$('#syPullYes').addEventListener('click',function(){
+  $('#syConfirm').hidden=true;
+  var c=syCreds();
+  syStatus('Đang tải dữ liệu về...');
+  fetch('https://api.github.com/gists/'+c.gist,{headers:ghHeaders(c.token)})
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
+    .then(function(data){
+      var f=data.files&&data.files[SYNC_FILE];
+      if(!f)throw new Error('Không tìm thấy dữ liệu trong gist này');
+      var incoming=JSON.parse(f.content);
+      if(!incoming||!incoming.plants)throw new Error('Dữ liệu không hợp lệ');
+      S=incoming;save();renderAll();
+      syStatus('Đã tải về và ghi đè dữ liệu máy này lúc '+dt(Date.now())+'.','good');
+    })
+    .catch(function(err){syStatus('Tải về thất bại: '+err.message,'bad')});
+});
+initSync();
 renderAll();
 </script>
 </body>
