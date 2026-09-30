@@ -39,7 +39,9 @@ h2{font-size:20px;margin:0;letter-spacing:-.01em}
 h3{font-size:14px;margin:0 0 8px}
 .note{background:var(--warn-soft);color:var(--warn);padding:8px 12px;border-radius:6px;font-size:12.5px}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;min-width:0}
-.stack{display:grid;gap:14px}
+.stack{display:grid;gap:14px;min-width:0}
+main{min-width:0}
+pre{margin:0}
 .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
 .stat{padding:14px 16px;border-radius:8px;background:var(--surface);border:1px solid var(--line);text-align:left;font:inherit;color:inherit;cursor:pointer}
 .stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
@@ -155,9 +157,52 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   <section id="sync" hidden><div class="stack">
     <h2>Đồng bộ giữa các máy</h2>
     <div class="panel stack">
-      <p class="muted" style="margin:0">Dùng một GitHub Gist riêng tư làm nơi lưu chung. Cần một Personal Access Token (GitHub → Settings → Developer settings → Fine-grained tokens hoặc Tokens classic, chỉ cần quyền <b>gist</b>). Token chỉ lưu trên trình duyệt này, chỉ được gửi tới api.github.com.</p>
-      <label class="f">Personal Access Token<input type="text" id="syToken" placeholder="ghp_..." autocomplete="off"></label>
-      <label class="f">Gist ID (để trống nếu tạo lần đầu)<input type="text" id="syGist" placeholder="tự điền sau khi đẩy lên lần đầu"></label>
+      <p class="muted" style="margin:0">Dữ liệu được lưu chung trong một Google Sheet, qua một Google Apps Script bạn tự triển khai (miễn phí, làm 1 lần). Xem hướng dẫn bên dưới để lấy <b>URL Web App</b> và đặt một <b>mã bí mật</b>. Chỉ cần dán 2 thứ này vào mỗi máy (điện thoại, máy tính) một lần.</p>
+      <details>
+        <summary style="cursor:pointer;font-weight:600">Hướng dẫn tạo nơi lưu (làm 1 lần)</summary>
+        <ol style="margin:8px 0 0;padding-left:20px;display:grid;gap:6px">
+          <li>Vào <b>sheets.google.com</b>, tạo một Google Sheet mới, đặt tên tuỳ ý (ví dụ "DearSunday Data").</li>
+          <li>Vào menu <b>Tiện ích mở rộng → Apps Script</b>.</li>
+          <li>Xoá hết code mẫu, dán đoạn code bên dưới vào, đổi <code>SECRET</code> thành một mã bí mật do bạn tự đặt.</li>
+          <li>Bấm <b>Triển khai → Triển khai mới</b>. Chọn loại <b>Web app</b>. Mục "Người thực thi" chọn <b>Tôi</b>, mục "Ai có quyền truy cập" chọn <b>Bất kỳ ai</b>. Bấm Triển khai, cấp quyền khi được hỏi.</li>
+          <li>Sao chép URL kết thúc bằng <code>/exec</code>, dán vào ô "URL Web App" bên dưới trên từng máy, cùng với mã bí mật bạn đã đặt.</li>
+        </ol>
+        <pre class="mail tw" style="margin-top:10px;white-space:pre">var SECRET = "doi-ma-bi-mat-cua-ban";
+var SHEET_NAME = "Data";
+
+function getSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(SHEET_NAME);
+  if (!sh) sh = ss.insertSheet(SHEET_NAME);
+  return sh;
+}
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+function doGet(e) {
+  if (e.parameter.secret !== SECRET) return json_({ok:false,error:"Sai mã bí mật"});
+  if (e.parameter.action === "pull") {
+    var sh = getSheet_();
+    var v = sh.getRange(1,1).getValue();
+    return json_({ok:true, data: v ? JSON.parse(v) : null});
+  }
+  return json_({ok:false,error:"Không rõ yêu cầu"});
+}
+function doPost(e) {
+  var q = e.parameter;
+  if (q.secret !== SECRET) return json_({ok:false,error:"Sai mã bí mật"});
+  if (q.action === "push") {
+    var sh = getSheet_();
+    sh.getRange(1,1).setValue(e.postData.contents);
+    sh.getRange(1,2).setValue(new Date());
+    return json_({ok:true});
+  }
+  return json_({ok:false,error:"Không rõ yêu cầu"});
+}</pre>
+      </details>
+      <label class="f">URL Web App<input type="text" id="syUrl" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off"></label>
+      <label class="f">Mã bí mật<input type="text" id="syToken" placeholder="mã bạn đặt trong SECRET" autocomplete="off"></label>
       <div class="bar">
         <button class="btn" id="syPush">Đẩy dữ liệu máy này lên</button>
         <button class="btn ghost" id="syPull">Tải dữ liệu chung về máy này</button>
@@ -382,39 +427,35 @@ $('#guestDetail').addEventListener('submit',function(e){
   }
   save();renderAll();
 });
-var SYNC_FILE='dearsunday-data.json', SYNC_TOKEN_KEY='dearsunday-sync-token', SYNC_GIST_KEY='dearsunday-sync-gist';
+var SYNC_URL_KEY='dearsunday-sync-url', SYNC_TOKEN_KEY='dearsunday-sync-token';
 function syStatus(msg,tone){var el=$('#syStatus');el.textContent=msg;el.style.color=tone==='bad'?'var(--bad)':tone==='good'?'var(--good)':''}
 function initSync(){
   try{
+    $('#syUrl').value=localStorage.getItem(SYNC_URL_KEY)||'';
     $('#syToken').value=localStorage.getItem(SYNC_TOKEN_KEY)||'';
-    $('#syGist').value=localStorage.getItem(SYNC_GIST_KEY)||'';
   }catch(e){}
 }
 function syCreds(){
-  var token=$('#syToken').value.trim(), gist=$('#syGist').value.trim();
-  try{localStorage.setItem(SYNC_TOKEN_KEY,token);localStorage.setItem(SYNC_GIST_KEY,gist)}catch(e){}
-  return{token:token,gist:gist};
+  var url=$('#syUrl').value.trim(), secret=$('#syToken').value.trim();
+  try{localStorage.setItem(SYNC_URL_KEY,url);localStorage.setItem(SYNC_TOKEN_KEY,secret)}catch(e){}
+  return{url:url,secret:secret};
 }
-function ghHeaders(token){return{authorization:'token '+token,accept:'application/vnd.github+json','content-type':'application/json'}}
 $('#syPush').addEventListener('click',function(){
   var c=syCreds();
-  if(!c.token){syStatus('Cần nhập Personal Access Token trước.','bad');return}
+  if(!c.url||!c.secret){syStatus('Cần nhập URL Web App và mã bí mật trước.','bad');return}
   syStatus('Đang đẩy dữ liệu lên...');
-  var body=JSON.stringify({description:'DearSunday Homestay data',public:false,files:{}});
-  var payload={description:'DearSunday Homestay data',public:false,files:{}};
-  payload.files[SYNC_FILE]={content:JSON.stringify(S,null,2)};
-  var url=c.gist?('https://api.github.com/gists/'+c.gist):'https://api.github.com/gists';
-  fetch(url,{method:c.gist?'PATCH':'POST',headers:ghHeaders(c.token),body:JSON.stringify(payload)})
-    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
+  var url=c.url+'?action=push&secret='+encodeURIComponent(c.secret);
+  fetch(url,{method:'POST',headers:{'content-type':'text/plain;charset=utf-8'},body:JSON.stringify(S)})
+    .then(function(r){return r.json()})
     .then(function(data){
-      if(!c.gist){$('#syGist').value=data.id;try{localStorage.setItem(SYNC_GIST_KEY,data.id)}catch(e){}}
-      syStatus('Đã đẩy lên lúc '+dt(Date.now())+'. Dùng cùng Token và Gist ID này trên máy kia để tải về.','good');
+      if(!data.ok)throw new Error(data.error||'Lỗi không rõ');
+      syStatus('Đã đẩy lên lúc '+dt(Date.now())+'. Dùng cùng URL và mã bí mật này trên máy kia để tải về.','good');
     })
-    .catch(function(err){syStatus('Đẩy lên thất bại: '+err.message+'. Kiểm tra lại Token (cần quyền gist).','bad')});
+    .catch(function(err){syStatus('Đẩy lên thất bại: '+err.message,'bad')});
 });
 $('#syPull').addEventListener('click',function(){
   var c=syCreds();
-  if(!c.token||!c.gist){syStatus('Cần nhập Token và Gist ID trước.','bad');return}
+  if(!c.url||!c.secret){syStatus('Cần nhập URL Web App và mã bí mật trước.','bad');return}
   $('#syConfirm').hidden=false;
 });
 $('#syPullNo').addEventListener('click',function(){$('#syConfirm').hidden=true});
@@ -422,14 +463,14 @@ $('#syPullYes').addEventListener('click',function(){
   $('#syConfirm').hidden=true;
   var c=syCreds();
   syStatus('Đang tải dữ liệu về...');
-  fetch('https://api.github.com/gists/'+c.gist,{headers:ghHeaders(c.token)})
-    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
+  var url=c.url+'?action=pull&secret='+encodeURIComponent(c.secret);
+  fetch(url)
+    .then(function(r){return r.json()})
     .then(function(data){
-      var f=data.files&&data.files[SYNC_FILE];
-      if(!f)throw new Error('Không tìm thấy dữ liệu trong gist này');
-      var incoming=JSON.parse(f.content);
-      if(!incoming||!incoming.plants)throw new Error('Dữ liệu không hợp lệ');
-      S=incoming;save();renderAll();
+      if(!data.ok)throw new Error(data.error||'Lỗi không rõ');
+      if(!data.data)throw new Error('Chưa có dữ liệu nào được đẩy lên từ máy khác');
+      if(!data.data.plants)throw new Error('Dữ liệu không hợp lệ');
+      S=data.data;save();renderAll();
       syStatus('Đã tải về và ghi đè dữ liệu máy này lúc '+dt(Date.now())+'.','good');
     })
     .catch(function(err){syStatus('Tải về thất bại: '+err.message,'bad')});
