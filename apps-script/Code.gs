@@ -25,7 +25,12 @@ var SH_BACKUP = "Backup";
 var USER_HEADER = ["username", "salt", "hash", "role", "active", "created"];
 
 function doGet() {
-  return out_({ ok: true, service: "DearSunday", hint: "Ứng dụng gọi bằng POST" });
+  try {
+    return out_({ ok: true, service: "DearSunday", build: BUILD, hasUsers: readUsers_().length > 0 });
+  } catch (err) {
+    console.error(err);
+    return out_({ ok: false, service: "DearSunday", build: BUILD, error: String(err && err.message) });
+  }
 }
 
 function doPost(e) {
@@ -86,10 +91,14 @@ function checkPass_(pw) {
   if (String(pw || "").length < 6) fail_("bad", "Mật khẩu cần ít nhất 6 ký tự");
 }
 
-// Kho dữ liệu là 1 Google Sheet. Script tự tạo Sheet này ở lần chạy đầu (hoặc dùng Sheet đang gắn với script nếu có).
-// Muốn Sheet nằm trong 1 thư mục Drive cụ thể, điền FOLDER_ID (cần cấp thêm quyền Drive khi triển khai). Để trống thì Sheet nằm ở "Drive của tôi".
-var FOLDER_ID = "";
+// Tài khoản tạo sẵn, được thêm 1 lần khi Sheet chưa có ai. Mỗi mục: {username, salt, hash, role}.
+// Chỉ lưu muối và mã băm, không lưu mật khẩu. Để trống nếu muốn tạo Admin bằng SETUP_CODE trên trang web.
+var SEED_USERS = [];
 
+var BUILD = "2";
+
+// Kho dữ liệu là 1 Google Sheet. Script tự tạo Sheet này ở lần chạy đầu (hoặc dùng Sheet đang gắn với script nếu có).
+// Sheet nằm ở "Drive của tôi", bạn có thể kéo vào thư mục tùy ý. Script không gọi dịch vụ Drive nên chỉ xin quyền Google Sheets.
 function ss_() {
   var props = PropertiesService.getScriptProperties();
   var id = props.getProperty("SS_ID");
@@ -111,14 +120,6 @@ function ss_() {
     var first = ss.getSheets()[0];
     first.setName("Doc-toi");
     first.getRange(1, 1).setValue("Đây là kho dữ liệu của app DearSunday. Đừng sửa hoặc xóa các sheet Users, Data, Backup.");
-    if (FOLDER_ID) {
-      try {
-        DriveApp.getFolderById(FOLDER_ID).addFile(DriveApp.getFileById(ss.getId()));
-        DriveApp.getRootFolder().removeFile(DriveApp.getFileById(ss.getId()));
-      } catch (err) {
-        console.error(err);
-      }
-    }
   }
   props.setProperty("SS_ID", ss.getId());
   return ss;
@@ -206,8 +207,29 @@ function auth_(req, needAdmin) {
 
 /* ---------- người dùng ---------- */
 
+function seedUsers_(sh) {
+  var props = PropertiesService.getScriptProperties();
+  if (!SEED_USERS.length || props.getProperty("SEEDED")) return;
+  if (sh.getLastRow() > 1) {
+    props.setProperty("SEEDED", "1");
+    return;
+  }
+  SEED_USERS.forEach(function (u) {
+    sh.appendRow([u.username, u.salt, u.hash, u.role === "admin" ? "admin" : "staff", true, new Date()]);
+  });
+  props.setProperty("SEEDED", "1");
+}
+
+function isDefaultPw_(u) {
+  for (var i = 0; i < SEED_USERS.length; i++) {
+    if (SEED_USERS[i].username === u.username && SEED_USERS[i].hash === u.hash) return true;
+  }
+  return false;
+}
+
 function readUsers_() {
   var sh = sheet_(SH_USERS, USER_HEADER);
+  seedUsers_(sh);
   var vals = sh.getDataRange().getValues();
   var out = [];
   for (var i = 1; i < vals.length; i++) {
@@ -297,12 +319,12 @@ function login_(req) {
     fail_("login", "Sai tên đăng nhập hoặc mật khẩu");
   }
   th.clear();
-  return { ok: true, token: makeToken_(u), user: u.username, role: u.role };
+  return { ok: true, token: makeToken_(u), user: u.username, role: u.role, defaultPassword: isDefaultPw_(u) };
 }
 
 function me_(req) {
   var u = auth_(req);
-  return { ok: true, user: u.username, role: u.role };
+  return { ok: true, user: u.username, role: u.role, defaultPassword: isDefaultPw_(u) };
 }
 
 function changePassword_(req) {
