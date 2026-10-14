@@ -1,28 +1,30 @@
 /**
- * DearSunday Homestay - máy chủ đồng bộ (Google Apps Script, tự tạo và dùng 1 Google Sheet làm kho dữ liệu).
+ * DearSunday Homestay - máy chủ đồng bộ (Google Apps Script).
  *
+ * - Dữ liệu và tài khoản lưu trong kho riêng của chính script (Script Properties), không cần quyền Google Sheets hay Drive.
+ *   Vì vậy script không đòi cấp quyền gì và không hiện cảnh báo "chưa xác minh ứng dụng".
  * - Tài khoản do Admin cấp. Mật khẩu được băm (muối + SHA-256 nhiều vòng), không lưu mật khẩu gốc.
  * - Phiên đăng nhập là token ký HMAC, hết hạn sau TOKEN_DAYS ngày, mất hiệu lực khi đổi mật khẩu hoặc khóa tài khoản.
  * - Quyền Admin được kiểm tra ở đây (phía máy chủ) cho mọi thao tác quản trị.
- * - Dữ liệu cả homestay là 1 JSON, lưu trong sheet "Data" (cắt nhiều dòng vì mỗi ô tối đa 50.000 ký tự).
+ * - Dữ liệu cả homestay là 1 JSON, cắt thành nhiều mảnh nhỏ vì mỗi giá trị lưu tối đa 9 KB.
  *
  * Cách triển khai: xem apps-script/README.md
  */
 
-// Đổi chuỗi này trước khi triển khai. Chỉ dùng 1 lần, để tạo tài khoản Admin đầu tiên.
+// Đổi chuỗi này trước khi triển khai. Chỉ dùng 1 lần, để tạo Admin đầu tiên (không cần nếu có SEED_USERS).
 var SETUP_CODE = "DOI-MA-NAY";
 
+// Tài khoản tạo sẵn, được thêm 1 lần khi chưa có ai. Mỗi mục: {username, salt, hash, role}.
+// Chỉ lưu muối và mã băm, không lưu mật khẩu. Để trống nếu muốn tạo Admin bằng SETUP_CODE trên trang web.
+var SEED_USERS = [];
+
+var BUILD = "3";
 var TOKEN_DAYS = 14;
 var HASH_ROUNDS = 150;
 var MAX_FAILS = 5;
-var MAX_DATA_CHARS = 1500000;
-var CHUNK = 40000;
-var BACKUP_EVERY_MS = 60 * 60 * 1000;
-
-var SH_USERS = "Users";
-var SH_DATA = "Data";
-var SH_BACKUP = "Backup";
-var USER_HEADER = ["username", "salt", "hash", "role", "active", "created"];
+// Kho Script Properties tối đa 500 KB. Tiếng Việt có dấu chiếm 2-3 byte mỗi ký tự, nên giới hạn thận trọng.
+var MAX_DATA_CHARS = 90000;
+var CHUNK = 3000;
 
 function doGet() {
   try {
@@ -47,7 +49,7 @@ function doPost(e) {
   } catch (err) {
     if (err && err.code) return out_({ ok: false, error: err.message, code: err.code });
     console.error(err);
-    return out_({ ok: false, error: "Lỗi máy chủ", code: "server" });
+    return out_({ ok: false, error: "Lỗi máy chủ: " + String(err && err.message), code: "server" });
   }
 }
 
@@ -91,48 +93,8 @@ function checkPass_(pw) {
   if (String(pw || "").length < 6) fail_("bad", "Mật khẩu cần ít nhất 6 ký tự");
 }
 
-// Tài khoản tạo sẵn, được thêm 1 lần khi Sheet chưa có ai. Mỗi mục: {username, salt, hash, role}.
-// Chỉ lưu muối và mã băm, không lưu mật khẩu. Để trống nếu muốn tạo Admin bằng SETUP_CODE trên trang web.
-var SEED_USERS = [];
-
-var BUILD = "2";
-
-// Kho dữ liệu là 1 Google Sheet. Script tự tạo Sheet này ở lần chạy đầu (hoặc dùng Sheet đang gắn với script nếu có).
-// Sheet nằm ở "Drive của tôi", bạn có thể kéo vào thư mục tùy ý. Script không gọi dịch vụ Drive nên chỉ xin quyền Google Sheets.
-function ss_() {
-  var props = PropertiesService.getScriptProperties();
-  var id = props.getProperty("SS_ID");
-  if (id) {
-    try {
-      return SpreadsheetApp.openById(id);
-    } catch (err) {
-      fail_("server", "Không mở được Google Sheet lưu dữ liệu");
-    }
-  }
-  var ss = null;
-  try {
-    ss = SpreadsheetApp.getActiveSpreadsheet();
-  } catch (err) {
-    ss = null;
-  }
-  if (!ss) {
-    ss = SpreadsheetApp.create("DearSunday Data");
-    var first = ss.getSheets()[0];
-    first.setName("Doc-toi");
-    first.getRange(1, 1).setValue("Đây là kho dữ liệu của app DearSunday. Đừng sửa hoặc xóa các sheet Users, Data, Backup.");
-  }
-  props.setProperty("SS_ID", ss.getId());
-  return ss;
-}
-
-function sheet_(name, header) {
-  var ss = ss_();
-  var sh = ss.getSheetByName(name);
-  if (!sh) {
-    sh = ss.insertSheet(name);
-    if (header) sh.appendRow(header);
-  }
-  return sh;
+function props_() {
+  return PropertiesService.getScriptProperties();
 }
 
 function withLock_(fn) {
@@ -165,7 +127,7 @@ function hash_(salt, pw) {
 }
 
 function key_() {
-  var p = PropertiesService.getScriptProperties();
+  var p = props_();
   var k = p.getProperty("HMAC_KEY");
   if (!k) {
     k = Utilities.getUuid() + Utilities.getUuid();
@@ -207,17 +169,13 @@ function auth_(req, needAdmin) {
 
 /* ---------- người dùng ---------- */
 
-function seedUsers_(sh) {
-  var props = PropertiesService.getScriptProperties();
-  if (!SEED_USERS.length || props.getProperty("SEEDED")) return;
-  if (sh.getLastRow() > 1) {
-    props.setProperty("SEEDED", "1");
-    return;
-  }
-  SEED_USERS.forEach(function (u) {
-    sh.appendRow([u.username, u.salt, u.hash, u.role === "admin" ? "admin" : "staff", true, new Date()]);
+function seedUsers_() {
+  var p = props_();
+  if (!SEED_USERS.length || p.getProperty("SEEDED") || p.getProperty("USERS")) return;
+  var list = SEED_USERS.map(function (u) {
+    return { username: u.username, salt: u.salt, hash: u.hash, role: u.role === "admin" ? "admin" : "staff", active: true, created: Date.now() };
   });
-  props.setProperty("SEEDED", "1");
+  p.setProperties({ USERS: JSON.stringify(list), SEEDED: "1" }, false);
 }
 
 function isDefaultPw_(u) {
@@ -228,24 +186,13 @@ function isDefaultPw_(u) {
 }
 
 function readUsers_() {
-  var sh = sheet_(SH_USERS, USER_HEADER);
-  seedUsers_(sh);
-  var vals = sh.getDataRange().getValues();
-  var out = [];
-  for (var i = 1; i < vals.length; i++) {
-    var r = vals[i];
-    if (!r[0]) continue;
-    out.push({
-      row: i + 1,
-      username: String(r[0]),
-      salt: String(r[1]),
-      hash: String(r[2]),
-      role: String(r[3]),
-      active: r[4] === true || String(r[4]).toLowerCase() === "true",
-      created: r[5]
-    });
-  }
-  return out;
+  seedUsers_();
+  var raw = props_().getProperty("USERS");
+  return raw ? JSON.parse(raw) : [];
+}
+
+function writeUsers_(list) {
+  props_().setProperty("USERS", JSON.stringify(list));
 }
 
 function findUser_(name) {
@@ -257,12 +204,31 @@ function findUser_(name) {
 
 function addUser_(name, pw, role) {
   var salt = Utilities.getUuid();
-  sheet_(SH_USERS, USER_HEADER).appendRow([name, salt, hash_(salt, pw), role, true, new Date()]);
-  return findUser_(name);
+  var list = readUsers_();
+  var u = { username: name, salt: salt, hash: hash_(salt, pw), role: role, active: true, created: Date.now() };
+  list.push(u);
+  writeUsers_(list);
+  return u;
+}
+
+function updateUser_(name, fn) {
+  var list = readUsers_();
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].username === name) {
+      fn(list[i]);
+      writeUsers_(list);
+      return list[i];
+    }
+  }
+  return null;
 }
 
 function publicUser_(u) {
-  return { username: u.username, role: u.role, active: u.active, created: u.created ? new Date(u.created).getTime() : null };
+  return { username: u.username, role: u.role, active: u.active, created: u.created || null };
+}
+
+function publicUsers_() {
+  return readUsers_().map(publicUser_);
 }
 
 function activeAdmins_() {
@@ -306,7 +272,7 @@ function bootstrap_(req) {
     if (readUsers_().length) fail_("forbidden", "Đã có tài khoản, không thể khởi tạo lại");
     var u = addUser_(name, String(req.password), "admin");
     th.clear();
-    return { ok: true, token: makeToken_(u), user: u.username, role: u.role };
+    return { ok: true, token: makeToken_(u), user: u.username, role: u.role, defaultPassword: false };
   });
 }
 
@@ -332,85 +298,74 @@ function changePassword_(req) {
   if (hash_(u.salt, String(req.oldPassword || "")) !== u.hash) fail_("login", "Mật khẩu hiện tại không đúng");
   checkPass_(req.newPassword);
   return withLock_(function () {
-    return { ok: true, token: setPass_(u, String(req.newPassword)) };
+    return { ok: true, token: setPass_(u.username, String(req.newPassword)) };
   });
 }
 
-function setPass_(u, pw) {
+function setPass_(name, pw) {
   var salt = Utilities.getUuid();
-  var h = hash_(salt, pw);
-  var sh = sheet_(SH_USERS, USER_HEADER);
-  sh.getRange(u.row, 2, 1, 2).setValues([[salt, h]]);
-  return makeToken_({ username: u.username, hash: h });
+  var updated = updateUser_(name, function (x) {
+    x.salt = salt;
+    x.hash = hash_(salt, pw);
+  });
+  return makeToken_(updated);
 }
 
 /* ---------- dữ liệu ---------- */
 
 function meta_() {
-  var raw = PropertiesService.getScriptProperties().getProperty("META");
+  var raw = props_().getProperty("META");
   return raw ? JSON.parse(raw) : { version: 0, updatedAt: null, updatedBy: null };
 }
 
 function setMeta_(m) {
-  PropertiesService.getScriptProperties().setProperty("META", JSON.stringify(m));
+  props_().setProperty("META", JSON.stringify(m));
 }
 
-function readChunks_(name) {
-  var sh = sheet_(name);
-  var last = sh.getLastRow();
-  if (last < 1) return null;
-  var vals = sh.getRange(1, 1, last, 1).getValues();
-  var s = vals
-    .map(function (r) {
-      return String(r[0]).slice(1);
-    })
-    .join("");
-  return s || null;
-}
-
-function writeChunks_(name, str) {
-  var sh = sheet_(name);
-  sh.clearContents();
+function readData_() {
+  var all = props_().getProperties();
+  var n = Number(all.DATA_N || 0);
+  if (!n) return null;
   var parts = [];
-  for (var i = 0; i < str.length; i += CHUNK) parts.push(["D" + str.slice(i, i + CHUNK)]);
-  if (!parts.length) return;
-  var range = sh.getRange(1, 1, parts.length, 1);
-  range.setNumberFormat("@");
-  range.setValues(parts);
+  for (var i = 0; i < n; i++) parts.push(all["D" + i] || "");
+  return parts.join("");
 }
 
-function backupIfDue_(oldStr) {
-  var props = PropertiesService.getScriptProperties();
-  var at = Number(props.getProperty("BACKUP_AT") || 0);
-  if (Date.now() - at < BACKUP_EVERY_MS) return;
-  writeChunks_(SH_BACKUP, oldStr);
-  props.setProperty("BACKUP_AT", String(Date.now()));
+function writeData_(str) {
+  var p = props_();
+  var old = Number(p.getProperty("DATA_N") || 0);
+  var n = Math.ceil(str.length / CHUNK);
+  var obj = {};
+  for (var i = 0; i < n; i++) obj["D" + i] = str.slice(i * CHUNK, (i + 1) * CHUNK);
+  obj.DATA_N = String(n);
+  p.setProperties(obj, false);
+  for (var j = n; j < old; j++) p.deleteProperty("D" + j);
 }
 
 function load_(req) {
   auth_(req);
-  var m = meta_();
-  if (req.since !== undefined && Number(req.since) === m.version) {
-    return { ok: true, notModified: true, version: m.version };
-  }
-  var raw = readChunks_(SH_DATA);
-  return { ok: true, version: m.version, updatedAt: m.updatedAt, updatedBy: m.updatedBy, data: raw ? JSON.parse(raw) : null };
+  return withLock_(function () {
+    var m = meta_();
+    if (req.since !== undefined && Number(req.since) === m.version) {
+      return { ok: true, notModified: true, version: m.version };
+    }
+    var raw = readData_();
+    return { ok: true, version: m.version, updatedAt: m.updatedAt, updatedBy: m.updatedBy, data: raw ? JSON.parse(raw) : null };
+  });
 }
 
 function save_(req) {
   var u = auth_(req);
   if (!req.data || typeof req.data !== "object") fail_("bad", "Thiếu dữ liệu");
   var str = JSON.stringify(req.data);
-  if (str.length > MAX_DATA_CHARS) fail_("big", "Dữ liệu quá lớn");
+  if (str.length > MAX_DATA_CHARS) fail_("big", "Dữ liệu quá lớn. Hãy tải bản sao lưu trong Cài đặt rồi xóa bớt dữ liệu cũ.");
   return withLock_(function () {
     var m = meta_();
     if (Number(req.baseVersion) !== m.version) {
-      var cur = readChunks_(SH_DATA);
+      var cur = readData_();
       return { ok: false, conflict: true, version: m.version, updatedAt: m.updatedAt, updatedBy: m.updatedBy, data: cur ? JSON.parse(cur) : null };
     }
-    var old = readChunks_(SH_DATA);
-    if (old) backupIfDue_(old);
-    writeChunks_(SH_DATA, str);
+    writeData_(str);
     var next = { version: m.version + 1, updatedAt: Date.now(), updatedBy: u.username };
     setMeta_(next);
     return { ok: true, version: next.version, updatedAt: next.updatedAt, updatedBy: next.updatedBy };
@@ -421,7 +376,7 @@ function save_(req) {
 
 function listUsers_(req) {
   auth_(req, true);
-  return { ok: true, users: readUsers_().map(publicUser_) };
+  return { ok: true, users: publicUsers_() };
 }
 
 function createUser_(req) {
@@ -433,7 +388,7 @@ function createUser_(req) {
   return withLock_(function () {
     if (findUser_(name)) fail_("bad", "Tên đăng nhập đã tồn tại");
     addUser_(name, String(req.password), role);
-    return { ok: true, users: readUsers_().map(publicUser_) };
+    return { ok: true, users: publicUsers_() };
   });
 }
 
@@ -443,24 +398,26 @@ function setPassword_(req) {
   if (!target) fail_("bad", "Không tìm thấy tài khoản");
   checkPass_(req.password);
   return withLock_(function () {
-    var token = setPass_(target, String(req.password));
-    var res = { ok: true, users: readUsers_().map(publicUser_) };
+    var token = setPass_(target.username, String(req.password));
+    var res = { ok: true, users: publicUsers_() };
     if (target.username === me.username) res.token = token;
     return res;
   });
 }
 
 function setRole_(req) {
-  var me = auth_(req, true);
+  auth_(req, true);
   var target = findUser_(req.username);
   if (!target) fail_("bad", "Không tìm thấy tài khoản");
   var role = req.role === "admin" ? "admin" : "staff";
   return withLock_(function () {
-    if (target.role === "admin" && role !== "admin" && activeAdmins_().length <= 1) {
+    if (target.role === "admin" && target.active && role !== "admin" && activeAdmins_().length <= 1) {
       fail_("bad", "Phải còn ít nhất 1 Admin đang hoạt động");
     }
-    sheet_(SH_USERS, USER_HEADER).getRange(target.row, 4).setValue(role);
-    return { ok: true, users: readUsers_().map(publicUser_) };
+    updateUser_(target.username, function (x) {
+      x.role = role;
+    });
+    return { ok: true, users: publicUsers_() };
   });
 }
 
@@ -474,8 +431,10 @@ function setActive_(req) {
     if (!active && target.role === "admin" && activeAdmins_().length <= 1) {
       fail_("bad", "Phải còn ít nhất 1 Admin đang hoạt động");
     }
-    sheet_(SH_USERS, USER_HEADER).getRange(target.row, 5).setValue(active);
-    return { ok: true, users: readUsers_().map(publicUser_) };
+    updateUser_(target.username, function (x) {
+      x.active = active;
+    });
+    return { ok: true, users: publicUsers_() };
   });
 }
 
@@ -488,7 +447,11 @@ function deleteUser_(req) {
     if (target.role === "admin" && target.active && activeAdmins_().length <= 1) {
       fail_("bad", "Phải còn ít nhất 1 Admin đang hoạt động");
     }
-    sheet_(SH_USERS, USER_HEADER).deleteRow(target.row);
-    return { ok: true, users: readUsers_().map(publicUser_) };
+    writeUsers_(
+      readUsers_().filter(function (x) {
+        return x.username !== target.username;
+      })
+    );
+    return { ok: true, users: publicUsers_() };
   });
 }
