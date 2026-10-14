@@ -224,6 +224,10 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
 <div class="wrap"><main>
 
   <section id="home"><div class="stack">
+    <div id="weakWarn" class="warnbox bar" hidden>
+      <span>Tài khoản đang dùng mật khẩu mặc định. Hãy đổi mật khẩu để bảo vệ dữ liệu khách.</span>
+      <button class="btn ghost" data-t="account">Đổi mật khẩu</button>
+    </div>
     <div id="todayStrip"></div>
 
     <div class="panel">
@@ -854,10 +858,15 @@ $('#guestDetail').addEventListener('submit',function(e){
 
 /* ============ gọi máy chủ ============ */
 function netErr(msg){var e=new Error(msg||'Không kết nối được máy chủ');e.net=true;return e}
+var MSG_BLOCKED='Máy chủ có phản hồi nhưng trình duyệt không được đọc kết quả. Thường do mục "Ai có quyền truy cập" chưa chọn "Bất kỳ ai", hoặc code Apps Script chưa dán đủ. Hãy mở địa chỉ máy chủ trong cửa sổ ẩn danh, phải thấy {"ok":true,"service":"DearSunday"...}.';
+var MSG_OFFLINE='Không kết nối được. Kiểm tra mạng và địa chỉ máy chủ (phải bắt đầu bằng https:// và kết thúc bằng /exec).';
+function probe(url){
+  return fetch(url,{mode:'no-cors'}).then(function(){return MSG_BLOCKED},function(){return MSG_OFFLINE});
+}
 function rawApi(url,body){
   return fetch(url,{method:'POST',headers:{'content-type':'text/plain;charset=utf-8'},body:JSON.stringify(body)})
-    .then(function(r){return r.json()},function(){throw netErr()})
-    .catch(function(err){if(err&&err.net)throw err;throw netErr('Máy chủ trả về dữ liệu không hợp lệ. Kiểm tra lại địa chỉ máy chủ.')});
+    .then(function(r){return r.json().catch(function(){throw netErr('Máy chủ trả về dữ liệu không hợp lệ. Kiểm tra lại địa chỉ máy chủ.')})},
+          function(){return probe(url).then(function(msg){throw netErr(msg)})});
 }
 function api(action,payload){
   var body=Object.assign({action:action,token:A.token},payload||{});
@@ -1048,6 +1057,7 @@ function enterApp(){
   document.body.classList.remove('locked');$('#auth').hidden=true;
   renderAll();show('home');
 }
+function setWeak(on){$('#weakWarn').hidden=!on}
 function startCloud(){
   MODE='cloud';
   $('#who').hidden=false;
@@ -1057,6 +1067,7 @@ function startCloud(){
   setSync('saving');
   var fresh=!!S._seed&&!lsGet(BASE_KEY);
   if(fresh)document.body.classList.add('syncing');
+  api('me').then(function(r){setWeak(!!(r&&r.defaultPassword))}).catch(function(){});
   initialSync().then(function(){document.body.classList.remove('syncing');startTimers()});
 }
 function startLocal(){
@@ -1092,6 +1103,7 @@ $('#pwForm').addEventListener('submit',function(e){
     if(!res.ok)throw new Error(res.error||'Không đổi được mật khẩu');
     A.token=res.token;lsSet(AUTH_KEY,JSON.stringify({token:A.token,user:A.user,role:A.role}));
     $('#pwOld').value='';$('#pwNew').value='';
+    setWeak(false);
     setMsg($('#pwMsg'),'Đã đổi mật khẩu.',true);
   }).catch(function(err){setMsg($('#pwMsg'),err.message)});
 });
