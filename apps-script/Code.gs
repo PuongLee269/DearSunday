@@ -1,5 +1,5 @@
 /**
- * DearSunday Homestay - máy chủ đồng bộ (Google Apps Script gắn với 1 Google Sheet).
+ * DearSunday Homestay - máy chủ đồng bộ (Google Apps Script, tự tạo và dùng 1 Google Sheet làm kho dữ liệu).
  *
  * - Tài khoản do Admin cấp. Mật khẩu được băm (muối + SHA-256 nhiều vòng), không lưu mật khẩu gốc.
  * - Phiên đăng nhập là token ký HMAC, hết hạn sau TOKEN_DAYS ngày, mất hiệu lực khi đổi mật khẩu hoặc khóa tài khoản.
@@ -86,8 +86,46 @@ function checkPass_(pw) {
   if (String(pw || "").length < 6) fail_("bad", "Mật khẩu cần ít nhất 6 ký tự");
 }
 
+// Kho dữ liệu là 1 Google Sheet. Script tự tạo Sheet này ở lần chạy đầu (hoặc dùng Sheet đang gắn với script nếu có).
+// Muốn Sheet nằm trong 1 thư mục Drive cụ thể, điền FOLDER_ID (cần cấp thêm quyền Drive khi triển khai). Để trống thì Sheet nằm ở "Drive của tôi".
+var FOLDER_ID = "";
+
+function ss_() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty("SS_ID");
+  if (id) {
+    try {
+      return SpreadsheetApp.openById(id);
+    } catch (err) {
+      fail_("server", "Không mở được Google Sheet lưu dữ liệu");
+    }
+  }
+  var ss = null;
+  try {
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+  } catch (err) {
+    ss = null;
+  }
+  if (!ss) {
+    ss = SpreadsheetApp.create("DearSunday Data");
+    var first = ss.getSheets()[0];
+    first.setName("Doc-toi");
+    first.getRange(1, 1).setValue("Đây là kho dữ liệu của app DearSunday. Đừng sửa hoặc xóa các sheet Users, Data, Backup.");
+    if (FOLDER_ID) {
+      try {
+        DriveApp.getFolderById(FOLDER_ID).addFile(DriveApp.getFileById(ss.getId()));
+        DriveApp.getRootFolder().removeFile(DriveApp.getFileById(ss.getId()));
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }
+  props.setProperty("SS_ID", ss.getId());
+  return ss;
+}
+
 function sheet_(name, header) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = ss_();
   var sh = ss.getSheetByName(name);
   if (!sh) {
     sh = ss.insertSheet(name);
