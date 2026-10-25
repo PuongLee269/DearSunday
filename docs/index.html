@@ -256,6 +256,7 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
     <button role="tab" data-t="home" aria-selected="true">Trang chủ</button>
     <button role="tab" data-t="items" aria-selected="false">Đồ đạc và cây</button>
     <button role="tab" data-t="clean" aria-selected="false">Dọn phòng</button>
+    <button role="tab" data-t="pkgs" aria-selected="false">Gói và giá</button>
     <button role="tab" data-t="guests" aria-selected="false">Khách hàng</button>
     <button role="tab" data-t="fin" aria-selected="false">Tài chính</button>
     <button role="tab" data-t="notes" aria-selected="false">Ghi chú</button>
@@ -330,6 +331,12 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
     </form>
     <div class="panel tw" id="guestList"></div>
     <div id="guestDetail"></div>
+  </div></section>
+
+  <section id="pkgs" hidden><div class="stack">
+    <h2>Gói và giá</h2>
+    <div class="panel"><p class="muted" style="margin:0">Sửa giá và ghi chú ngay tại đây, tự lưu và đồng bộ cho các máy đã đăng nhập. Giá chỉ nằm trong dữ liệu sau khi đăng nhập, không nằm trong mã nguồn công khai. Đặt phòng mới sẽ lấy giá ở đây để tính tiền, Tài chính dùng giá đó khi ghi thu.</p></div>
+    <div id="pkgCards" class="stack"></div>
   </div></section>
 
   <section id="fin" hidden><div class="stack">
@@ -422,6 +429,9 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
           <datalist id="guestNames"></datalist>
           <label class="f">Số điện thoại<input type="text" id="bkPhone" inputmode="tel" maxlength="30" autocomplete="off"></label>
           <label class="f">Ghi chú<input type="text" id="bkNote" maxlength="200" placeholder="Ví dụ: đến muộn, 2 khách"></label>
+          <label class="f">Phụ thu lễ<select id="bkLe"><option value="0">Không</option><option value="10">Cộng 10%</option><option value="15">Cộng 15%</option></select></label>
+          <label class="f">Giá (đ)<input type="number" id="bkPrice" min="0" step="1000" inputmode="numeric"></label>
+          <div class="muted" id="bkPriceHint"></div>
         </div>
       </section>
     </form>
@@ -488,6 +498,7 @@ var GOI=[
   {id:'h4eve',ten:'4H buổi tối',kieu:'linhhoat',dai:240,tu:'15:30',den:'18:00',don:60,mau:'#7bbf74',hinh:'clock',moTa:'4 tiếng linh hoạt, xong sau 19:00',khung:'Bắt đầu 15:30 đến 18:00'}
 ];
 var GOI_BY={};GOI.forEach(function(g){GOI_BY[g.id]=g});
+function GP(id){return (S&&S.prices&&S.prices[id])||{gia:0,ghi:''}}
 function gioBatDau(g){var out=[],m=tomin(g.tu),e=tomin(g.den);for(;m<=e;m+=30)out.push(pad2(Math.floor(m/60))+':'+pad2(m%60));return out}
 
 var S0="stroke=\"#4a3a2c\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"";
@@ -557,6 +568,7 @@ function normalize(o){
   ['plants','toys','notes','guests','tx','todos','bookings'].forEach(function(k){if(!Array.isArray(o[k]))o[k]=[]});
   if(!o.clean||typeof o.clean!=='object')o.clean={last:null,tasks:defaultClean()};
   if(!Array.isArray(o.clean.tasks))o.clean.tasks=[];
+  if(!o.prices||typeof o.prices!=='object'||Array.isArray(o.prices))o.prices={};
   o.bookings.forEach(migrateBooking);
   return o;
 }
@@ -754,8 +766,8 @@ function bookingRow(b){
   var g=GOI_BY[b.pkg],n=diffDays(dateOf(b.startAt),dateOf(b.endAt)),cl=xungDot(b,b.id).length,arm=armDel===b.id;
   return '<div class="res bk" style="border-left-color:'+g.mau+'"><div class="bar"><div>'+chipGoi(b)+' <b>'+esc(b.name)+'</b></div>'+(cl?'<span class="pill bad">Trùng lịch</span>':'')+'</div>'+
     '<div>'+WD[dow(dateOf(b.startAt))]+' '+fdy(dateOf(b.startAt))+' · '+khoang(b)+(g.kieu==='dem'?' · '+n+' đêm':'')+'</div>'+
-    (b.phone?'<div>'+esc(b.phone)+'</div>':'')+(b.note?'<div>'+esc(b.note)+'</div>':'')+
-    '<div class="bar" style="justify-content:flex-start"><button class="btn ghost" data-bkedit="'+b.id+'">Sửa</button><button class="btn ghost'+(arm?' danger':'')+'" data-bkdel="'+b.id+'">'+(arm?'Bấm lại để xóa':'Xóa')+'</button></div></div>';
+    (b.price?'<div><b>'+money(b.price)+'</b> '+(b.paid?'<span class="pill good">Đã thu</span>':'<span class="pill warn">Chưa thu</span>')+'</div>':'')+(b.phone?'<div>'+esc(b.phone)+'</div>':'')+(b.note?'<div>'+esc(b.note)+'</div>':'')+
+    '<div class="bar" style="justify-content:flex-start">'+(b.price&&!b.paid?'<button class="btn" data-paid="'+b.id+'">Ghi thu</button>':'')+'<button class="btn ghost" data-bkedit="'+b.id+'">Sửa</button><button class="btn ghost'+(arm?' danger':'')+'" data-bkdel="'+b.id+'">'+(arm?'Bấm lại để xóa':'Xóa')+'</button></div></div>';
 }
 function availHtml(d){
   return '<div class="avail">'+GOI.map(function(g){
@@ -784,7 +796,7 @@ function renderHome(){
 }
 
 /* ============ cửa sổ đặt phòng ============ */
-var F={date:'',pkg:null,nights:1,start:'',cvao:'',cra:''};
+var F={date:'',pkg:null,nights:1,start:'',cvao:'',cra:'',le:0,touched:false};
 function quickDates(){
   var t=today(),sat=addDays(t,(6-dow(t)+7)%7||7);
   return [['Hôm nay',t],['Ngày mai',addDays(t,1)],['Thứ bảy',sat],['Chủ nhật',addDays(sat,1)]];
@@ -834,18 +846,28 @@ function renderSummary(){
   w.hidden=!msg;w.textContent=msg;
   btn.disabled=bad;btn.textContent=cl.length?'Vẫn lưu (trùng lịch)':'Lưu đặt phòng';btn.classList.toggle('danger',cl.length>0);
 }
-function renderForm(){renderDateStep();renderPkgs();renderTimeStep();renderSummary()}
+function calcGia(){var g=F.pkg&&GP(F.pkg).gia||0;return Math.round(g*(GOI_BY[F.pkg]&&GOI_BY[F.pkg].kieu==='dem'?F.nights:1)*(1+F.le/100))}
+function renderPrice(){
+  $('#bkLe').value=String(F.le);
+  var c=calcGia();
+  if(!F.touched)$('#bkPrice').value=c>0?c:'';
+  var g=F.pkg&&GOI_BY[F.pkg];
+  $('#bkPriceHint').innerHTML=!g?'Chọn gói để tự tính giá.':(c>0?'Giá gói '+money(GP(F.pkg).gia)+(g.kieu==='dem'&&F.nights>1?' × '+F.nights+' đêm':'')+(F.le?' + '+F.le+'% lễ':'')+' = '+money(c)+(F.touched?' <button type="button" class="linkbtn" data-reprice="1">Tính lại</button>':''):'Gói này chưa có giá. Nhập giá ở tab "Gói và giá" hoặc gõ trực tiếp ở đây.');
+}
+function renderForm(){renderDateStep();renderPkgs();renderTimeStep();renderPrice();renderSummary()}
+$('#bkLe').addEventListener('change',function(){F.le=+$('#bkLe').value;renderPrice()});
+$('#bkPrice').addEventListener('input',function(){F.touched=$('#bkPrice').value!=='';renderPrice()});
 function openForm(b,day,pkg){
   editId=b?b.id:null;
   $('#bkTitle').textContent=b?'Sửa đặt phòng':'Đặt phòng mới';
   if(b){
     var g=GOI_BY[b.pkg];
-    F={date:dateOf(b.startAt),pkg:b.pkg,nights:Math.max(1,diffDays(dateOf(b.startAt),dateOf(b.endAt))),start:g.kieu==='linhhoat'?hhmm(b.startAt):'',cvao:'',cra:''};
+    F={date:dateOf(b.startAt),pkg:b.pkg,nights:Math.max(1,diffDays(dateOf(b.startAt),dateOf(b.endAt))),start:g.kieu==='linhhoat'?hhmm(b.startAt):'',cvao:'',cra:'',le:b.le||0,touched:b.price!=null};
     if(g.kieu!=='linhhoat'){if(hhmm(b.startAt)!==g.vao)F.cvao=hhmm(b.startAt);if(hhmm(b.endAt)!==g.ra)F.cra=hhmm(b.endAt)}
-    $('#bkName').value=b.name;$('#bkPhone').value=b.phone||'';$('#bkNote').value=b.note||'';
+    $('#bkName').value=b.name;$('#bkPhone').value=b.phone||'';$('#bkNote').value=b.note||'';$('#bkPrice').value=b.price!=null?b.price:'';
   }else{
-    F={date:day||today(),pkg:pkg||null,nights:1,start:'',cvao:'',cra:''};
-    $('#bkName').value='';$('#bkPhone').value='';$('#bkNote').value='';
+    F={date:day||today(),pkg:pkg||null,nights:1,start:'',cvao:'',cra:'',le:0,touched:false};
+    $('#bkName').value='';$('#bkPhone').value='';$('#bkNote').value='';$('#bkPrice').value='';
   }
   $('#bookPanel').hidden=false;document.body.classList.add('noscroll');$('#bookPanel').scrollTop=0;
   renderForm();
@@ -867,7 +889,7 @@ $('#bkForm').addEventListener('submit',function(e){
   if(!c||(GOI_BY[F.pkg].kieu==='linhhoat'&&!F.start)){renderSummary();return}
   if(!name){w.hidden=false;w.textContent='Vui lòng nhập tên khách.';$('#bkName').focus();return}
   if(tmin(c.endAt)<=tmin(c.startAt)){renderSummary();return}
-  var rec={name:name,phone:$('#bkPhone').value.trim(),note:$('#bkNote').value.trim(),pkg:c.pkg,nights:F.nights,startAt:c.startAt,endAt:c.endAt};
+  var rec={name:name,phone:$('#bkPhone').value.trim(),note:$('#bkNote').value.trim(),pkg:c.pkg,nights:F.nights,startAt:c.startAt,endAt:c.endAt,le:F.le,price:$('#bkPrice').value===''?null:Math.max(0,Math.round(+$('#bkPrice').value))};
   if(editId){var b=find(S.bookings,editId);if(b)Object.assign(b,rec)}
   else S.bookings.push(Object.assign({id:uid()},rec));
   calCur=F.date;selDay=F.date;
@@ -931,10 +953,31 @@ function renderGuests(){
   var pad=function(d){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)};
   $('#cFrom').value=pad(new Date());$('#cTo').value=pad(new Date(Date.now()+2*DAY));
 }
+function thuTien(id){
+  var b=find(S.bookings,id);if(!b||!b.price||b.paid)return;
+  var tx={id:uid(),type:'INCOME',cat:'Tiền phòng',amt:b.price,desc:b.name+' · '+GOI_BY[b.pkg].ten+' '+fdy(dateOf(b.startAt)),at:Date.now(),bk:b.id};
+  S.tx.push(tx);b.paid=tx.id;save();renderAll();bao('Đã ghi thu '+money(b.price))
+}
+function renderPriceTab(){
+  var box=$('#pkgCards');
+  if(box.contains(document.activeElement)&&document.activeElement.matches('input,textarea'))return;
+  box.innerHTML=GOI.map(function(g){var p=GP(g.id);
+    return '<div class="panel" style="border-left:10px solid '+g.mau+'"><div class="bar"><h3 style="margin:0">'+esc(g.ten)+'</h3><span class="pill mute">'+esc(g.kieu==='dem'?'giá 1 đêm':'giá 1 lượt')+'</span></div>'+
+      '<div class="muted">'+esc(g.khung)+' · '+esc(g.moTa)+' · dọn '+g.don+' phút</div>'+
+      '<label class="f">Giá (đ)<input type="number" min="0" step="1000" inputmode="numeric" data-pp="'+g.id+'" data-pf="gia" value="'+(p.gia||'')+'" placeholder="Chưa có giá"></label>'+
+      '<label class="f">Ghi chú nội bộ<input type="text" maxlength="200" data-pp="'+g.id+'" data-pf="ghi" value="'+esc(p.ghi||'')+'" placeholder="Ví dụ: đã gồm nước, khăn"></label></div>'}).join('');
+}
+$('#pkgCards').addEventListener('change',function(e){
+  var el=e.target,id=el.dataset.pp;if(!id)return;
+  var p=S.prices[id]=Object.assign({gia:0,ghi:''},S.prices[id]);
+  if(el.dataset.pf==='gia')p.gia=Math.max(0,Math.round(+el.value)||0);else p.ghi=el.value.trim();
+  save();renderHome();renderFin();bao('Đã lưu giá')
+});
 function renderFin(){
   var inc=0,exp=0;S.tx.forEach(function(t){t.type==='INCOME'?inc+=t.amt:exp+=t.amt});
+  var pend=0;S.bookings.forEach(function(b){if(b.price&&!b.paid)pend+=b.price});
   var st=function(l,v,c){return '<div class="stat"><span>'+l+'</span><b class="'+c+'">'+money(v)+'</b></div>'};
-  $('#finStats').innerHTML=st('Tổng thu',inc,'inc')+st('Tổng chi',exp,'exp')+st('Số dư',inc-exp,'');
+  $('#finStats').innerHTML=st('Tổng thu',inc,'inc')+st('Tổng chi',exp,'exp')+st('Số dư',inc-exp,'')+st('Dự kiến sắp thu',pend,'');
   var rows=S.tx.slice().sort(function(a,b){return b.at-a.at});
   $('#txList').innerHTML='<table><thead><tr><th>Ngày</th><th>Loại</th><th>Danh mục</th><th>Ghi chú</th><th class="num">Số tiền</th></tr></thead><tbody>'+
    rows.map(function(t){var i=t.type==='INCOME';return '<tr><td>'+new Date(t.at).toLocaleDateString('vi-VN')+'</td><td><span class="pill '+(i?'good':'bad')+'">'+(i?'Thu':'Chi')+'</span></td><td>'+esc(t.cat)+'</td><td class="muted">'+(esc(t.desc)||'—')+'</td><td class="num '+(i?'inc':'exp')+'">'+(i?'+':'-')+money(t.amt)+'</td></tr>'}).join('')+'</tbody></table>';
@@ -944,8 +987,8 @@ function setView(v){
   $('#plantsView').hidden=v!=='plants';$('#toysView').hidden=v!=='toys';
   $('#vPlants').setAttribute('aria-pressed',v==='plants');$('#vToys').setAttribute('aria-pressed',v==='toys');
 }
-function renderAll(){renderHome();renderPlants();renderToys();renderClean();renderNotes();renderGuests();renderFin();if(!$('#bookPanel').hidden)renderForm()}
-var SECTIONS=['home','items','clean','guests','fin','notes','settings','account'];
+function renderAll(){renderHome();renderPlants();renderToys();renderClean();renderNotes();renderGuests();renderPriceTab();renderFin();if(!$('#bookPanel').hidden)renderForm()}
+var SECTIONS=['home','items','clean','pkgs','guests','fin','notes','settings','account'];
 function show(t){
   if(t==='settings'&&!(MODE==='cloud'&&A.role==='admin'))t='home';
   if(t==='account'&&MODE!=='cloud')t='home';
@@ -973,7 +1016,7 @@ function bao(msg){var t=$('#toast');t.textContent=msg;t.classList.add('show');cl
 
 /* ============ sự kiện ============ */
 document.addEventListener('click',function(e){
-  var t=e.target.closest('[data-t],[data-go],[data-act],[data-guest],[data-view],[data-pick],[data-goday],[data-calnav],[data-calmode],[data-bkedit],[data-bkdel],[data-newbk],[data-newpkg],[data-uact],[data-qd],[data-dstep],[data-pkg],[data-nights],[data-flex],[data-resettime]');
+  var t=e.target.closest('[data-t],[data-go],[data-act],[data-guest],[data-view],[data-pick],[data-goday],[data-calnav],[data-calmode],[data-bkedit],[data-bkdel],[data-newbk],[data-newpkg],[data-uact],[data-qd],[data-dstep],[data-pkg],[data-nights],[data-flex],[data-resettime],[data-reprice],[data-paid]');
   if(!t)return;
   var d=t.dataset, id=d.id;
   if(d.t){show(d.t);return}
@@ -986,6 +1029,8 @@ document.addEventListener('click',function(e){
   if(d.pkg){F.pkg=d.pkg;F.nights=1;F.start='';F.cvao='';F.cra='';renderForm();return}
   if(d.nights){F.nights=Math.min(30,Math.max(1,F.nights+ +d.nights));renderForm();return}
   if(d.flex){F.start=d.flex;renderForm();return}
+  if(d.reprice){F.touched=false;renderPrice();return}
+  if(d.paid){thuTien(d.paid);return}
   if(d.resettime){F.cvao='';F.cra='';renderForm();return}
   if(d.pick!==undefined){
     selDay=d.pick||null;renderCal();
