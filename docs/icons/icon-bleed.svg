@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Dear Sunday: quả chuối mặt cười">
+  <defs>
+    <pattern id="dots" width="48" height="48" patternUnits="userSpaceOnUse">
+      <circle cx="12" cy="12" r="5" fill="#9bd8d8"/>
+      <circle cx="36" cy="36" r="5" fill="#9bd8d8"/>
+    </pattern>
+    <clipPath id="tile"><rect width="512" height="512"/></clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="512" height="512" fill="#79c3c4"/>
+    <rect width="512" height="512" fill="url(#dots)"/>
+    <!-- mặt trời phía sau -->
+    <g transform="translate(256 262)">
+      <g stroke="#4a3a2c" stroke-width="12" stroke-linecap="round">
+        <path d="M0 -218v-34M0 218v34M-218 0h-34M218 0h34M154 -154l24 -24M-154 154l-24 24M154 154l24 24M-154 -154l-24 -24" fill="none" stroke="none"/>
+      </g>
+      <circle r="196" fill="#fff7e8" stroke="#4a3a2c" stroke-width="14"/>
+      <circle r="168" fill="#ffe9a8" opacity=".75"/>
+    </g>
+    <!-- chuối -->
+    <g stroke-linejoin="round" stroke-linecap="round">
+      <path d="M150 128c-8 10-4 22 8 28 14 8 28 4 38-6l-12-30c-12-8-26-6-34 8z" fill="#9a7a3a" stroke="#4a3a2c" stroke-width="14" transform="translate(150 -2) rotate(14 160 140)"/>
+      <path d="M205 150C170 215 150 300 205 376c42 58 140 70 202 14 22-20 36-46 46-76-26 0-62-2-96-24-56-36-68-96-52-174z" fill="#f2c14e" stroke="#4a3a2c" stroke-width="16"/>
+      <path d="M228 192c-18 56-14 112 22 150 34 34 94 40 142 20" fill="none" stroke="#ffe08a" stroke-width="14" opacity=".9"/>
+      <path d="M440 322c14 6 24 20 20 36" fill="none" stroke="#4a3a2c" stroke-width="16"/>
+    </g>
+    <!-- mặt -->
+    <g>
+      <ellipse cx="258" cy="276" rx="16" ry="22" fill="#4a3a2c" transform="rotate(-12 258 276)"/>
+      <ellipse cx="326" cy="304" rx="16" ry="22" fill="#4a3a2c" transform="rotate(-24 326 304)"/>
+      <circle cx="262" cy="268" r="6" fill="#fff7e8"/>
+      <circle cx="330" cy="296" r="6" fill="#fff7e8"/>
+      <ellipse cx="226" cy="318" rx="17" ry="11" fill="#ef7b6b" opacity=".85" transform="rotate(-12 226 318)"/>
+      <ellipse cx="364" cy="342" rx="17" ry="11" fill="#ef7b6b" opacity=".85" transform="rotate(-24 364 342)"/>
+      <path d="M272 326c16 22 46 26 64 8" fill="none" stroke="#4a3a2c" stroke-width="12" stroke-linecap="round"/>
+    </g>
+  </g>
+</svg>
