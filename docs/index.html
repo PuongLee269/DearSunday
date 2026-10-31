@@ -379,6 +379,13 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
       <p class="muted" style="margin:0">Giá này tự điền khi tạo đặt phòng mới (vẫn sửa tay được ở từng đặt phòng). Sửa xong tự lưu và đồng bộ. Giá chỉ nằm trong dữ liệu sau khi đăng nhập, không nằm trong mã nguồn công khai.</p>
       <div id="pkgCards" class="stack"></div>
     </div>
+    <div class="panel stack" id="aiPanel">
+      <h3 style="margin:0">Xuất dữ liệu cho AI phân tích</h3>
+      <p class="muted" style="margin:0">Tạo bảng đặt lịch (kèm các gói, giá, khoảng dọn phòng) để dán vào AI. Dữ liệu không tự gửi đi đâu, bạn tự dán.</p>
+      <label class="chk"><input type="checkbox" id="aiAnon" checked> Ẩn tên, số điện thoại và ghi chú của khách</label>
+      <div class="row"><button class="btn" id="aiCopy">Sao chép</button><button class="btn ghost" id="aiDown">Tải file .txt</button></div>
+      <textarea id="aiText" readonly rows="8" aria-label="Dữ liệu xuất"></textarea>
+    </div>
     <div class="panel stack" id="userPanel">
       <h3 style="margin:0">Tài khoản người dùng</h3>
       <p class="muted">Chỉ Admin nhìn thấy mục này. Mọi người dùng đăng nhập bằng tài khoản do bạn cấp, dữ liệu đồng bộ tự động giữa các máy.</p>
@@ -1461,7 +1468,35 @@ $('#pwForm').addEventListener('submit',function(e){
 
 /* ============ cài đặt (chỉ Admin) ============ */
 var uiUsers=[], uiPwFor=null, uiDel=null;
+function aiExport(){
+  var anon=$('#aiAnon').checked,who={},nw=0;
+  var nm=function(b){if(!anon)return b.name;var k=b.name.trim().toLowerCase();if(!who[k])who[k]='Khách '+(++nw);return who[k]};
+  var q=function(v){v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+  var L=['Dữ liệu đặt phòng homestay Sun (1 phòng), xuất ngày '+today()+'.','Hãy phân tích: tỷ lệ lấp đầy theo tuần/tháng, gói bán chạy, doanh thu, khung giờ trống, khách quay lại, và gợi ý tối ưu giá hoặc lịch.','','CÁC GÓI (giá đồng; phút dọn phòng sau khi khách trả):','goi,loai,khung_gio,phut_don,gia'];
+  GOI.forEach(function(g){L.push([g.ten,g.kieu==='dem'?'qua đêm (giá 1 đêm)':g.kieu==='ngay'?'trong ngày':'4 tiếng linh hoạt',g.khung,g.don,GP(g.id).gia||''].map(q).join(','))});
+  L.push('','ĐẶT PHÒNG:','stt,khach,goi,nhan_phong,tra_phong,so_dem,phu_thu_le_pct,gia,da_thu,trang_thai_thu'+(anon?'':',sdt,ghi_chu'));
+  S.bookings.slice().sort(function(a,b){return a.startAt<b.startAt?-1:1}).forEach(function(b,i){
+    var st={none:'chưa thu',deposit:'tạm ứng',full:'đã thanh toán đủ'}[payState(b)];
+    var r=[i+1,nm(b),GOI_BY[b.pkg].ten,b.startAt.replace('T',' '),b.endAt.replace('T',' '),GOI_BY[b.pkg].kieu==='dem'?diffDays(dateOf(b.startAt),dateOf(b.endAt)):0,b.le||0,b.price||'',b.paidAmt||0,st];
+    if(!anon)r.push(b.phone||'',b.note||'');
+    L.push(r.map(q).join(','));
+  });
+  L.push('','Tổng '+S.bookings.length+' đặt phòng.');
+  return L.join('\n');
+}
+function showAi(){$('#aiText').value=aiExport()}
+$('#aiAnon').addEventListener('change',showAi);
+$('#aiCopy').addEventListener('click',function(){
+  showAi();var t=$('#aiText');t.select();
+  var done=function(){bao('Đã sao chép, dán vào AI')};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t.value).then(done,function(){try{document.execCommand('copy');done()}catch(e){bao('Hãy chọn và sao chép thủ công')}});
+  else{try{document.execCommand('copy');done()}catch(e){bao('Hãy chọn và sao chép thủ công')}}
+});
+$('#aiDown').addEventListener('click',function(){
+  showAi();var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([$('#aiText').value],{type:'text/plain;charset=utf-8'}));a.download='dearsunday-dat-phong.txt';document.body.appendChild(a);a.click();a.remove();
+});
 function renderSettings(){
+  showAi();
   var adm=MODE==='cloud'&&A.role==='admin';
   $('#userPanel').hidden=!adm;$('#dataPanel').hidden=!adm;
   renderPriceTab();
