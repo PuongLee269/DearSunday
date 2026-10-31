@@ -5,7 +5,7 @@
 `docs/index.html` là một trang HTML duy nhất, chạy trên GitHub Pages, dành cho homestay 1 phòng:
 
 - **Trang chủ**: việc cần làm ở đầu trang (thêm việc, tick hoàn thành, nhắc tự động), lịch đặt phòng bên dưới với chế độ xem tuần/tháng, ngày kín/trống/trùng phân biệt rõ, thêm đặt phòng và cảnh báo khi trùng lịch.
-- **Đồng bộ**: các máy dùng chung một mã đồng bộ, dữ liệu tự đồng bộ qua một Google Apps Script của bạn (xem `apps-script/README.md`). Mục **Cài đặt** (giá gói, sao lưu) mở bằng mã PIN Admin lưu trên từng máy.
+- **Đăng nhập, đồng bộ**: tài khoản do Admin cấp, dữ liệu tự đồng bộ giữa các máy qua một Google Apps Script của bạn. Mục **Cài đặt** (quản lý tài khoản) chỉ Admin nhìn thấy.
 - Máy chủ đồng bộ là Google Apps Script trong thư mục [`apps-script/`](./apps-script/README.md), kèm hướng dẫn cài đặt.
 
 Phần bên dưới mô tả bản Next.js cũ (Prisma/SQLite), không cần cho trang web trực tuyến.
