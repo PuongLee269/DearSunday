@@ -44,3 +44,20 @@ Kho Script Properties tối đa 500 KB, script giới hạn dữ liệu cả hom
 Cần làm một lần trong Apps Script editor: chạy hàm `caiTuDongLich` (Google sẽ hỏi cấp thêm quyền gọi ra ngoài và tạo bộ hẹn giờ).
 
 Giới hạn: lịch chỉ có ngày, không có giờ. Đặt từ nền tảng được coi là nhận 14:00, trả 11:00. Nền tảng tự đọc lịch của bạn sau vài giờ nên vẫn có khoảng chờ có thể đặt trùng.
+
+## Khóa thông minh TTLock: tự tạo mã vào cửa (build 3.3)
+
+Dùng [TTLock Open Platform](https://euopen.ttlock.com) (`api.sciener.com`).
+
+**Cần có:**
+1. Tài khoản nhà phát triển tại https://euopen.ttlock.com/register, được TTLock duyệt, rồi tạo ứng dụng để có **Client ID** và **Client Secret**.
+2. Tài khoản app TTLock (email hoặc số điện thoại, mật khẩu) đang quản lý khóa. Không dùng tài khoản nhà phát triển.
+3. Khóa phải hỗ trợ mã dạng V4 (khóa hiện đại). Mã tạo kiểu "theo khoảng thời gian" (`keyboardPwd/get`, loại 3) nên không cần gateway.
+
+**Cài đặt:** Cài đặt (Admin) → Khóa thông minh TTLock: nhập 4 thông tin, bấm "Kết nối và lấy danh sách khóa", chọn khóa. Mật khẩu TTLock chỉ lưu dạng MD5 trong Script Properties.
+
+**Cách dùng:** mỗi đặt phòng có nút **Tạo mã vào cửa**. Mã hiệu lực từ giờ nhận phòng (làm tròn xuống giờ) đến giờ trả phòng + 1 giờ (làm tròn lên giờ), theo giờ Việt Nam (UTC+7). Mã lưu vào đặt phòng và đồng bộ cho mọi máy; có nút sao chép tin nhắn gửi khách.
+
+**Tự động:** chạy hàm `caiTuDongMaKhoa` một lần trong Apps Script editor. Mỗi giờ máy chủ tạo mã cho các đặt phòng sắp nhận trong 24 giờ tới mà chưa có mã.
+
+**Cần biết:** theo tài liệu TTLock, mã loại này phải được dùng ít nhất một lần trong 24 giờ kể từ giờ bắt đầu, nếu không sẽ bị vô hiệu. Thời hạn mã làm tròn theo giờ. Đổi giờ đặt phòng sau khi đã tạo mã thì mã cũ không tự đổi theo.
