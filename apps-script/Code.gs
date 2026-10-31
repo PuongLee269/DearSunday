@@ -18,16 +18,13 @@ var SETUP_CODE = "DOI-MA-NAY";
 // Chỉ lưu muối và mã băm, không lưu mật khẩu. Để trống nếu muốn tạo Admin bằng SETUP_CODE trên trang web.
 var SEED_USERS = [];
 
-var BUILD = "3.1";
+var BUILD = "3.2";
 var TOKEN_DAYS = 14;
 var HASH_ROUNDS = 150;
 var MAX_FAILS = 5;
 // Kho Script Properties tối đa 500 KB. Tiếng Việt có dấu chiếm 2-3 byte mỗi ký tự, nên giới hạn thận trọng.
 var MAX_DATA_CHARS = 90000;
 var CHUNK = 3000;
-
-// Mã bí mật nằm trong địa chỉ lịch iCal (?ics=MÃ) để Airbnb, Booking... đọc lịch. Đổi chuỗi này thì địa chỉ cũ ngừng hoạt động.
-var ICS_TOKEN = "DOI-MA-LICH";
 
 function doGet(e) {
   if (e && e.parameter && e.parameter.ics !== undefined) return ics_(String(e.parameter.ics));
@@ -70,7 +67,11 @@ var ACTIONS_ = {
   setPassword: setPassword_,
   setRole: setRole_,
   setActive: setActive_,
-  deleteUser: deleteUser_
+  deleteUser: deleteUser_,
+  extInfo: extInfo_,
+  setExt: setExt_,
+  syncExt: syncExt_,
+  rotateIcs: rotateIcs_
 };
 
 /* ---------- tiện ích ---------- */
@@ -350,11 +351,14 @@ function load_(req) {
   auth_(req);
   return withLock_(function () {
     var m = meta_();
+    var x = extState_();
+    var extPart = { extAt: x.at };
+    if (Number(req.extSince) !== x.at) extPart.ext = x.events;
     if (req.since !== undefined && Number(req.since) === m.version) {
-      return { ok: true, notModified: true, version: m.version };
+      return Object.assign({ ok: true, notModified: true, version: m.version }, extPart);
     }
     var raw = readData_();
-    return { ok: true, version: m.version, updatedAt: m.updatedAt, updatedBy: m.updatedBy, data: raw ? JSON.parse(raw) : null };
+    return Object.assign({ ok: true, version: m.version, updatedAt: m.updatedAt, updatedBy: m.updatedBy, data: raw ? JSON.parse(raw) : null }, extPart);
   });
 }
 
@@ -460,9 +464,23 @@ function deleteUser_(req) {
   });
 }
 
-/* ---------- lịch iCal cho Airbnb, Booking ---------- */
+/* ---------- lịch iCal xuất cho Airbnb, Booking ---------- */
 
-// Chỉ xuất ngày bị chặn, không có tên, số điện thoại, giá hay ghi chú của khách.
+// Mã trong địa chỉ lịch (?ics=MÃ) tự tạo và lưu trong script. Tạo lại mã bằng taoLaiMaLich() hoặc nút trong Cài đặt.
+function icsToken_() {
+  var p = props_();
+  var t = p.getProperty("ICS_TOKEN");
+  if (!t) {
+    t = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, "").slice(0, 40);
+    p.setProperty("ICS_TOKEN", t);
+  }
+  return t;
+}
+
+function icsUrl_() {
+  return ScriptApp.getService().getUrl() + "?ics=" + icsToken_();
+}
+
 function icsDate_(d) {
   return d.replace(/-/g, "");
 }
@@ -473,7 +491,12 @@ function icsAddDay_(d) {
   return t.toISOString().slice(0, 10);
 }
 
-function icsText_(token) {
+function icsStamp_(ms) {
+  return new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+}
+
+// Chỉ xuất ngày bị chặn, không có tên, số điện thoại, giá hay ghi chú của khách.
+function icsText_() {
   var bookings = [];
   var raw = readData_();
   if (raw) {
@@ -481,8 +504,10 @@ function icsText_(token) {
       bookings = JSON.parse(raw).bookings || [];
     } catch (err) {}
   }
-  var stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
-  var cut = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+  var m = meta_();
+  var mod = icsStamp_(m.updatedAt || Date.now());
+  var seq = m.version || 0;
+  var cut = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   var L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//DearSunday//Lich//VI", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:Dear Sunday"];
   bookings.forEach(function (b) {
     if (!b || !b.id || !b.startAt || !b.endAt) return;
@@ -490,21 +515,179 @@ function icsText_(token) {
     var e = String(b.endAt).slice(0, 10);
     if (e < cut) return;
     if (e <= s) e = icsAddDay_(s); // gói trong ngày chặn cả ngày đó
-    L.push("BEGIN:VEVENT", "UID:" + String(b.id).replace(/[^A-Za-z0-9_-]/g, "") + "@dearsunday", "DTSTAMP:" + stamp,
-      "DTSTART;VALUE=DATE:" + icsDate_(s), "DTEND;VALUE=DATE:" + icsDate_(e), "SUMMARY:Dear Sunday - da dat", "TRANSP:OPAQUE", "END:VEVENT");
+    L.push("BEGIN:VEVENT", "UID:" + String(b.id).replace(/[^A-Za-z0-9_-]/g, "") + "@dearsunday", "DTSTAMP:" + mod, "LAST-MODIFIED:" + mod, "SEQUENCE:" + seq,
+      "DTSTART;VALUE=DATE:" + icsDate_(s), "DTEND;VALUE=DATE:" + icsDate_(e), "SUMMARY:Reserved", "TRANSP:OPAQUE", "END:VEVENT");
   });
   L.push("END:VCALENDAR");
   return L.join("\r\n") + "\r\n";
 }
 
 function ics_(token) {
-  if (ICS_TOKEN === "DOI-MA-LICH" || token !== ICS_TOKEN) {
+  if (token !== icsToken_()) {
     return out_({ ok: false, service: "DearSunday", build: BUILD, error: "Địa chỉ lịch không đúng" });
   }
-  return ContentService.createTextOutput(icsText_(token)).setMimeType(ContentService.MimeType.ICAL);
+  return ContentService.createTextOutput(icsText_()).setMimeType(ContentService.MimeType.ICAL);
 }
 
 // Chạy trong editor để xem địa chỉ lịch cần dán vào Airbnb, Booking.
 function layLinkLich() {
-  Logger.log(ScriptApp.getService().getUrl() + "?ics=" + ICS_TOKEN);
+  Logger.log(icsUrl_());
+}
+
+// Tạo mã mới: địa chỉ cũ ngừng hoạt động, phải dán lại địa chỉ mới vào Airbnb, Booking.
+function taoLaiMaLich() {
+  props_().deleteProperty("ICS_TOKEN");
+  Logger.log("Địa chỉ lịch mới: " + icsUrl_());
+}
+
+function rotateIcs_(req) {
+  auth_(req, true);
+  taoLaiMaLich();
+  return { ok: true, icsUrl: icsUrl_() };
+}
+
+/* ---------- nhập lịch từ Airbnb, Booking (iCal) ---------- */
+
+var EXT_SOURCES = { airbnb: "Airbnb", booking: "Booking.com" };
+
+function extSrc_() {
+  var raw = props_().getProperty("EXT_SRC");
+  return raw ? JSON.parse(raw) : {};
+}
+
+function extRec_(id) {
+  var raw = props_().getProperty("EXT_" + id);
+  return raw ? JSON.parse(raw) : null;
+}
+
+function icsFold_(txt) {
+  return String(txt).replace(/\r?\n[ \t]/g, "");
+}
+
+function icsDay_(v) {
+  var m = /(\d{4})(\d{2})(\d{2})/.exec(v || "");
+  return m ? m[1] + "-" + m[2] + "-" + m[3] : "";
+}
+
+// Đọc các VEVENT thành cặp ngày [bắt đầu, kết thúc). Bỏ sự kiện đã hủy, đã qua, và sự kiện do chính Dear Sunday xuất ra.
+function parseIcs_(txt) {
+  var cut = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  var lines = icsFold_(txt).split(/\r?\n/);
+  var out = [], seen = {}, cur = null;
+  lines.forEach(function (ln) {
+    if (ln === "BEGIN:VEVENT") { cur = {}; return; }
+    if (ln === "END:VEVENT") {
+      if (cur && cur.s && !cur.cancel && !/dear\s*sunday|dearsunday/i.test((cur.sum || "") + (cur.uid || ""))) {
+        var e = cur.e;
+        if (!e || e <= cur.s) e = icsAddDay_(cur.s);
+        if (e >= cut) {
+          var k = cur.s + "|" + e;
+          if (!seen[k]) { seen[k] = 1; out.push([cur.s, e]); }
+        }
+      }
+      cur = null;
+      return;
+    }
+    if (!cur) return;
+    var i = ln.indexOf(":");
+    if (i < 0) return;
+    var name = ln.slice(0, i).split(";")[0].toUpperCase();
+    var val = ln.slice(i + 1);
+    if (name === "DTSTART") cur.s = icsDay_(val);
+    else if (name === "DTEND") cur.e = icsDay_(val);
+    else if (name === "STATUS") cur.cancel = /CANCEL/i.test(val);
+    else if (name === "SUMMARY") cur.sum = val;
+    else if (name === "UID") cur.uid = val;
+  });
+  out.sort(function (a, b) { return a[0] < b[0] ? -1 : 1; });
+  return out.slice(0, 300);
+}
+
+function fetchExt_() {
+  var p = props_();
+  var src = extSrc_();
+  Object.keys(EXT_SOURCES).forEach(function (id) {
+    if (!src[id]) { p.deleteProperty("EXT_" + id); return; }
+    var old = extRec_(id);
+    var rec = { at: Date.now(), ok: false, err: "", ev: [] };
+    try {
+      var r = UrlFetchApp.fetch(src[id], { muteHttpExceptions: true, followRedirects: true });
+      var code = r.getResponseCode();
+      var body = r.getContentText();
+      if (code !== 200) rec.err = "Nền tảng trả về mã " + code;
+      else if (body.indexOf("BEGIN:VCALENDAR") < 0) rec.err = "Địa chỉ này không phải lịch iCal";
+      else { rec.ok = true; rec.ev = parseIcs_(body); }
+    } catch (err) {
+      rec.err = "Không đọc được: " + String(err && err.message).slice(0, 120);
+    }
+    if (!rec.ok && old && old.ev) rec.ev = old.ev; // lỗi tạm thời thì giữ lịch lần trước
+    p.setProperty("EXT_" + id, JSON.stringify(rec));
+  });
+  p.setProperty("EXT_AT", String(Date.now()));
+}
+
+function extState_() {
+  var events = [];
+  Object.keys(EXT_SOURCES).forEach(function (id) {
+    var r = extRec_(id);
+    if (r && r.ev) r.ev.forEach(function (x) { events.push({ src: id, s: x[0], e: x[1] }); });
+  });
+  return { at: Number(props_().getProperty("EXT_AT") || 0), events: events };
+}
+
+function extInfo_(req) {
+  auth_(req, true);
+  return extInfoOut_();
+}
+
+function extInfoOut_() {
+  var src = extSrc_();
+  var list = Object.keys(EXT_SOURCES).map(function (id) {
+    var r = extRec_(id);
+    var host = "";
+    if (src[id]) { var m = /^https:\/\/([^\/?#]+)/.exec(src[id]); host = m ? m[1] : ""; }
+    return { id: id, name: EXT_SOURCES[id], has: !!src[id], host: host, at: r ? r.at : null, ok: r ? r.ok : null, err: r ? r.err : "", count: r && r.ev ? r.ev.length : 0 };
+  });
+  return { ok: true, sources: list, icsUrl: icsUrl_(), auto: autoOn_() };
+}
+
+function setExt_(req) {
+  auth_(req, true);
+  var src = extSrc_();
+  (req.sources || []).forEach(function (x) {
+    if (!EXT_SOURCES[x.id]) return;
+    var u = String(x.url || "").trim();
+    if (u && !/^https:\/\/\S+$/.test(u)) fail_("bad", "Địa chỉ " + EXT_SOURCES[x.id] + " phải bắt đầu bằng https://");
+    if (u.indexOf(ScriptApp.getService().getUrl()) === 0) fail_("bad", "Đây là địa chỉ lịch của Dear Sunday, không phải của " + EXT_SOURCES[x.id]);
+    if (u) src[x.id] = u;
+    else delete src[x.id];
+  });
+  props_().setProperty("EXT_SRC", JSON.stringify(src));
+  fetchExt_();
+  return extInfoOut_();
+}
+
+function syncExt_(req) {
+  auth_(req, true);
+  fetchExt_();
+  return extInfoOut_();
+}
+
+// Hàm cho bộ hẹn giờ, 30 phút một lần.
+function capNhatLichNgoai() {
+  fetchExt_();
+}
+
+function autoOn_() {
+  return ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === "capNhatLichNgoai"; });
+}
+
+// Chạy một lần trong editor: bật tự cập nhật lịch Airbnb, Booking mỗi 30 phút (Google sẽ hỏi cấp quyền).
+function caiTuDongLich() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === "capNhatLichNgoai") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("capNhatLichNgoai").timeBased().everyMinutes(30).create();
+  fetchExt_();
+  Logger.log("Đã bật tự cập nhật mỗi 30 phút.");
 }

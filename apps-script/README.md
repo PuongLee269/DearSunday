@@ -35,14 +35,12 @@ Kho Script Properties tối đa 500 KB, script giới hạn dữ liệu cả hom
 - Mọi tài khoản (cả nhân viên) xem được khách hàng, đặt phòng và tài chính. Chỉ mục Cài đặt là riêng của Admin.
 - Kiểm tra thông tin khách bằng AI, mã khóa thông minh và gửi email trong app hiện vẫn là giả lập.
 
-## Lịch iCal cho Airbnb, Booking (build 3.1)
+## Lịch iCal hai chiều với Airbnb, Booking (build 3.2)
 
-Script có địa chỉ lịch chỉ-đọc để nền tảng đặt phòng nhập vào và chặn ngày:
+**Xuất (Airbnb, Booking đọc lịch của bạn):** địa chỉ `<URL /exec>?ics=<mã>`. Mã tự tạo và lưu trong script (không nằm trong code). Xem địa chỉ ở **Cài đặt → Lịch Airbnb và Booking**, hoặc chạy hàm `layLinkLich`. Muốn đổi mã thì bấm "Tạo lại mã lịch" hoặc chạy `taoLaiMaLich` (địa chỉ cũ ngừng hoạt động, phải dán lại địa chỉ mới vào hai nền tảng). Lịch chỉ có ngày bị chặn (`Reserved`), không có tên, số điện thoại, giá hay ghi chú. Gói qua đêm chặn các đêm từ ngày nhận đến ngày trả; gói trong ngày và 4H chặn cả ngày đó. Đơn đã qua hơn 1 ngày không được xuất.
 
-`<URL /exec>?ics=<ICS_TOKEN>`
+**Nhập (app biết ngày đã đặt trên Airbnb, Booking):** dán địa chỉ iCal xuất của từng nền tảng vào **Cài đặt → Lịch Airbnb và Booking** (chỉ Admin). Địa chỉ lưu trên máy chủ, không trả lại cho trình duyệt. Máy chủ đọc lại mỗi 30 phút, các ngày đó hiện trên lịch và báo trùng khi đặt phòng. Sự kiện đã hủy, đã qua, và sự kiện do chính Dear Sunday xuất ra bị bỏ qua. Nếu một lần đọc lỗi thì giữ lịch lần trước.
 
-- Đặt `ICS_TOKEN` (chuỗi bí mật dài, không đưa lên GitHub) trong script rồi triển khai phiên bản mới. Đổi chuỗi này thì địa chỉ cũ ngừng hoạt động.
-- Chạy hàm `layLinkLich` trong editor để xem địa chỉ đầy đủ.
-- Lịch chỉ có ngày bị chặn ("da dat"), không có tên, số điện thoại, giá hay ghi chú của khách. Gói qua đêm chặn các đêm từ ngày nhận đến ngày trả (ngày trả không bị chặn). Gói trong ngày và 4H chặn cả ngày đó.
-- Lịch lấy từ dữ liệu đã đồng bộ lên máy chủ, nên chỉ có các đặt phòng đã được đồng bộ. Nền tảng tự đọc lại sau vài giờ, không tức thời.
-- Chiều ngược lại (kéo lịch Airbnb/Booking về app) cần địa chỉ iCal xuất của họ và quyền gọi ra ngoài của script, chưa làm.
+Cần làm một lần trong Apps Script editor: chạy hàm `caiTuDongLich` (Google sẽ hỏi cấp thêm quyền gọi ra ngoài và tạo bộ hẹn giờ).
+
+Giới hạn: lịch chỉ có ngày, không có giờ. Đặt từ nền tảng được coi là nhận 14:00, trả 11:00. Nền tảng tự đọc lịch của bạn sau vài giờ nên vẫn có khoảng chờ có thể đặt trùng.

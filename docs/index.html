@@ -402,6 +402,23 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
         <div><button class="btn">Cấp tài khoản</button></div>
       </form>
     </div>
+    <div class="panel stack" id="icalPanel">
+      <h3 style="margin:0">Lịch Airbnb và Booking</h3>
+      <p class="muted" style="margin:0">Dán địa chỉ lịch iCal (xuất) của Airbnb và Booking.com. Máy chủ đọc lại mỗi 30 phút, các ngày khách đã đặt trên nền tảng hiện trên lịch và báo trùng khi bạn đặt phòng. Địa chỉ được lưu trên máy chủ, không hiện lại ở đây.</p>
+      <form id="extForm" class="stack">
+        <label class="f">Airbnb<input type="text" id="exAirbnb" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="https://www.airbnb.com.vn/calendar/ical/....ics?t=..."></label>
+        <label class="f">Booking.com<input type="text" id="exBooking" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="https://admin.booking.com/hotel/hoteladmin/ical.html?t=..."></label>
+        <div id="extMsg" class="warnbox" hidden></div>
+        <div class="row"><button class="btn">Lưu và cập nhật ngay</button><button class="btn ghost" type="button" id="extSync">Cập nhật ngay</button></div>
+      </form>
+      <div id="extStatus" class="list"></div>
+      <div style="border-top:3px dashed var(--brown);padding-top:12px" class="stack">
+        <h3 style="margin:0">Lịch của Dear Sunday (gửi cho Airbnb, Booking)</h3>
+        <p class="muted" style="margin:0">Địa chỉ này chỉ chứa ngày bị chặn, không có thông tin khách. Ai có địa chỉ đều xem được ngày bận của phòng.</p>
+        <label class="f">Địa chỉ lịch<input type="text" id="icsUrl" readonly></label>
+        <div class="row"><button class="btn ghost" type="button" id="icsCopy">Sao chép</button><button class="btn ghost" type="button" id="icsRotate">Tạo lại mã lịch</button></div>
+      </div>
+    </div>
     <div class="panel stack" id="dataPanel">
       <h3 style="margin:0">Dữ liệu</h3>
       <div id="metaInfo" class="muted"></div>
@@ -481,7 +498,7 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
 // Dán địa chỉ Web App (kết thúc bằng /exec) vào đây để mọi máy dùng chung, không phải nhập lại.
 var CONFIG={API_URL:'https://script.google.com/macros/s/AKfycbw-eAIdCCp4bF2ndDLhYWxho9tlHa7PH7Kd1PmYNeZggs8ikzlqWXSP0p2Kt2Ep_HtMYw/exec'};
 
-var KEY='dearsunday-v2', BASE_KEY='dearsunday-base', AUTH_KEY='dearsunday-auth', URL_KEY='dearsunday-api', DEMO_KEY='dearsunday-demo', CAL_KEY='dearsunday-calmode';
+var KEY='dearsunday-v2', BASE_KEY='dearsunday-base', AUTH_KEY='dearsunday-auth', URL_KEY='dearsunday-api', DEMO_KEY='dearsunday-demo', CAL_KEY='dearsunday-calmode', EXT_KEY='dearsunday-ext';
 var DAY=86400000, H=3600000;
 var MODE='local';
 var A={url:'',token:'',user:'',role:''};
@@ -529,6 +546,11 @@ var GOI=[
   {id:'h4eve',ten:'4H buổi tối',kieu:'linhhoat',dai:240,tu:'15:30',den:'18:00',don:60,mau:'#7bbf74',hinh:'clock',moTa:'4 tiếng linh hoạt, xong sau 19:00',khung:'Bắt đầu 15:30 đến 18:00'}
 ];
 var GOI_BY={};GOI.forEach(function(g){GOI_BY[g.id]=g});
+/* lịch đặt từ Airbnb, Booking: coi như "gói" riêng chỉ để hiển thị, không đưa vào danh sách chọn gói */
+var EXT_SRC={airbnb:{id:'ext_airbnb',ten:'Airbnb',kieu:'dem',don:90,mau:'#ff8fa3',vao:'14:00',ra:'11:00'},booking:{id:'ext_booking',ten:'Booking.com',kieu:'dem',don:90,mau:'#8fb6ff',vao:'14:00',ra:'11:00'}};
+Object.keys(EXT_SRC).forEach(function(k){GOI_BY[EXT_SRC[k].id]=EXT_SRC[k]});
+var EXT={at:0,events:[]};
+try{var _x=JSON.parse(lsGet(EXT_KEY)||'null');if(_x&&Array.isArray(_x.events))EXT=_x}catch(e){}
 function GP(id){return (S&&S.prices&&S.prices[id])||{gia:0,ghi:''}}
 function gioBatDau(g){var out=[],m=tomin(g.tu),e=tomin(g.den);for(;m<=e;m+=30)out.push(pad2(Math.floor(m/60))+':'+pad2(m%60));return out}
 
@@ -622,9 +644,11 @@ function drop(list,id){return list.filter(function(x){return x.id!==id})}
 
 /* ============ lịch đặt phòng: logic ============
    Mỗi đặt phòng chiếm [bắt đầu, kết thúc + thời gian dọn của gói]. Hai đặt phòng trùng khi các khoảng này chồng nhau. */
+function extB(){return EXT.events.map(function(x){return{id:'ext:'+x.src+':'+x.s+':'+x.e,ext:true,name:'Khách đặt trên '+EXT_SRC[x.src].ten,phone:'',note:'',pkg:EXT_SRC[x.src].id,nights:Math.max(1,diffDays(x.s,x.e)),startAt:x.s+'T14:00',endAt:x.e+'T11:00'}})}
+function allB(){return S.bookings.concat(extB())}
 function occOf(b){var g=GOI_BY[b.pkg]||GOI_BY.sunday;return{s:tmin(b.startAt),e:tmin(b.endAt),c:g.don}}
 function dungDo(a,b){return a.s<b.e+b.c&&b.s<a.e+a.c}
-function xungDot(cand,ignoreId){var o=occOf(cand);return S.bookings.filter(function(x){return x.id!==ignoreId&&dungDo(o,occOf(x))})}
+function xungDot(cand,ignoreId){var o=occOf(cand);return allB().filter(function(x){return x.id!==ignoreId&&dungDo(o,occOf(x))})}
 // Dựng giờ nhận và giờ trả cho một gói. o: {nights, start (gói 4H), cvao, cra (giờ chỉnh tay)}
 function ungVien(id,date,o){
   o=o||{};var g=GOI_BY[id],s,e;
@@ -644,7 +668,7 @@ function trangThaiGoi(id,date,o,ignoreId){
 }
 function lichNgay(d){
   var ds=tmin(d+'T00:00'),de=ds+1440;
-  return S.bookings.filter(function(b){var o=occOf(b);return o.s<de&&o.e+o.c>ds}).sort(function(a,b){return tmin(a.startAt)-tmin(b.startAt)});
+  return allB().filter(function(b){var o=occOf(b);return o.s<de&&o.e+o.c>ds}).sort(function(a,b){return tmin(a.startAt)-tmin(b.startAt)});
 }
 function ngayTrung(d){
   var l=lichNgay(d);
@@ -658,8 +682,9 @@ function dayState(d){
 }
 function clashDay(){
   var n=nowMin(),best=null;
-  for(var i=0;i<S.bookings.length;i++)for(var j=i+1;j<S.bookings.length;j++){
-    var a=occOf(S.bookings[i]),b=occOf(S.bookings[j]);
+  var all=allB();
+  for(var i=0;i<all.length;i++)for(var j=i+1;j<all.length;j++){
+    var a=occOf(all[i]),b=occOf(all[j]);
     if(dungDo(a,b)&&Math.max(a.e+a.c,b.e+b.c)>n){
       var s=Math.max(a.s,b.s,n),d=dateOf(fmtDT(new Date(s*60000)));
       if(!best||d<best)best=d;
@@ -678,8 +703,8 @@ var calMode=lsGet(CAL_KEY)==='week'?'week':'month', calCur=today(), selDay=null,
 
 function renderToday(){
   var n=nowMin(),cur=null,cl=null;
-  S.bookings.forEach(function(b){var o=occOf(b);if(o.s<=n&&n<o.e)cur=b;else if(o.e<=n&&n<o.e+o.c)cl=b});
-  var up=S.bookings.filter(function(b){return occOf(b).s>n}).sort(function(a,b){return tmin(a.startAt)-tmin(b.startAt)})[0];
+  allB().forEach(function(b){var o=occOf(b);if(o.s<=n&&n<o.e)cur=b;else if(o.e<=n&&n<o.e+o.c)cl=b});
+  var up=allB().filter(function(b){return occOf(b).s>n}).sort(function(a,b){return tmin(a.startAt)-tmin(b.startAt)})[0];
   var h;
   if(cur){
     h='<div class="strip occ"><div class="sl">Bây giờ</div><div class="sv">Có khách: '+esc(cur.name)+'</div><div>'+esc(GOI_BY[cur.pkg].ten)+', trả phòng '+hhmm(cur.endAt)+(dateOf(cur.endAt)===today()?' hôm nay':' ngày '+fd(dateOf(cur.endAt)))+'</div></div>';
@@ -693,7 +718,7 @@ function renderToday(){
 
 function autoReminders(){
   var t=today(),n=nowMin(),tm=addDays(t,1),r=[];
-  S.bookings.slice().sort(function(a,b){return tmin(a.startAt)-tmin(b.startAt)}).forEach(function(b){
+  allB().sort(function(a,b){return tmin(a.startAt)-tmin(b.startAt)}).forEach(function(b){
     var o=occOf(b),sd=dateOf(b.startAt),ed=dateOf(b.endAt),g=GOI_BY[b.pkg];
     if(sd===t&&o.s>n)r.push({txt:'Hôm nay '+b.name+' nhận phòng lúc '+hhmm(b.startAt)+' ('+g.ten+')',day:t});
     if(ed===t&&o.e+o.c>n)r.push({txt:'Hôm nay '+b.name+' trả phòng lúc '+hhmm(b.endAt)+', cần dọn phòng',go:'clean',btn:'Mở checklist dọn'});
@@ -770,7 +795,7 @@ function weekRow(d,t){
 }
 function renderLegend(){
   $('#calLegend').innerHTML='<span><i class="sw f"></i>Trống</span><span><i class="sw p"></i>Còn chỗ</span><span><i class="sw k"></i>Kín</span><span><i class="sw c"></i>Trùng lịch</span>'+
-    GOI.map(function(g){return '<span><i class="dot" style="background:'+g.mau+'"></i>'+esc(g.ten)+'</span>'}).join('');
+    GOI.concat(Object.keys(EXT_SRC).filter(function(k){return EXT.events.some(function(x){return x.src===k})}).map(function(k){return EXT_SRC[k]})).map(function(g){return '<span><i class="dot" style="background:'+g.mau+'"></i>'+esc(g.ten)+'</span>'}).join('');
 }
 function renderCal(){
   $('#calModeM').setAttribute('aria-pressed',calMode==='month');
@@ -796,6 +821,7 @@ function renderCal(){
   renderDetail();
 }
 function bookingRow(b){
+  if(b.ext)return '<div class="res bk" style="border-left-color:'+GOI_BY[b.pkg].mau+'"><div class="bar"><div>'+chipGoi(b)+' <b>'+esc(b.name)+'</b></div></div><div>'+WD[dow(dateOf(b.startAt))]+' '+fdy(dateOf(b.startAt))+' đến '+fdy(dateOf(b.endAt))+'</div><div class="muted">Lịch lấy từ '+esc(GOI_BY[b.pkg].ten)+', sửa ở nền tảng đó.</div></div>';
   var g=GOI_BY[b.pkg],n=diffDays(dateOf(b.startAt),dateOf(b.endAt)),cl=xungDot(b,b.id).length,arm=armDel===b.id;
   return '<div class="res bk" style="border-left-color:'+g.mau+'"><div class="bar"><div>'+chipGoi(b)+' <b>'+esc(b.name)+'</b></div>'+(cl?'<span class="pill bad">Trùng lịch</span>':'')+'</div>'+
     '<div>'+WD[dow(dateOf(b.startAt))]+' '+fdy(dateOf(b.startAt))+' · '+khoang(b)+(g.kieu==='dem'?' · '+n+' đêm':'')+'</div>'+
@@ -820,7 +846,7 @@ function renderDetail(){
 }
 function renderUpcoming(){
   var n=nowMin();
-  var list=S.bookings.filter(function(b){return occOf(b).e>=n}).sort(function(a,b){return tmin(a.startAt)-tmin(b.startAt)}).slice(0,8);
+  var list=allB().filter(function(b){return occOf(b).e>=n}).sort(function(a,b){return tmin(a.startAt)-tmin(b.startAt)}).slice(0,8);
   $('#upList').innerHTML=list.length?list.map(bookingRow).join(''):'<div class="empty">Chưa có đặt phòng sắp tới. Bấm "+ Đặt phòng" để thêm.</div>';
 }
 function renderHome(){
@@ -1325,11 +1351,12 @@ function handleRemote(res){
 }
 function pull(){
   if(MODE!=='cloud'||Sy.busy)return Promise.resolve();
-  return api('load',{since:Sy.ver}).then(handleRemote).catch(handleErr);
+  return api('load',{since:Sy.ver,extSince:EXT.at}).then(function(res){takeExt(res);return handleRemote(res)}).catch(handleErr);
 }
 function initialSync(){
   loadBase();setSync('saving');
-  return api('load',{}).then(function(res){
+  return api('load',{extSince:EXT.at}).then(function(res){
+    takeExt(res);
     Sy.meta={updatedAt:res.updatedAt,updatedBy:res.updatedBy};
     if(!res.data){
       S=normalize(S._seed?blank():plain());persist();
@@ -1342,6 +1369,12 @@ function initialSync(){
     }
     return handleRemote(res);
   }).catch(handleErr);
+}
+function takeExt(res){
+  if(!res||res.ext===undefined)return;
+  EXT={at:res.extAt||0,events:res.ext||[]};
+  try{localStorage.setItem(EXT_KEY,JSON.stringify(EXT))}catch(e){}
+  renderAll();
 }
 function startTimers(){
   clearInterval(Sy.poll);
@@ -1498,14 +1531,56 @@ $('#aiDown').addEventListener('click',function(){
 function renderSettings(){
   showAi();
   var adm=MODE==='cloud'&&A.role==='admin';
-  $('#userPanel').hidden=!adm;$('#dataPanel').hidden=!adm;
+  $('#userPanel').hidden=!adm;$('#icalPanel').hidden=!adm;$('#dataPanel').hidden=!adm;
   renderPriceTab();
   if(!adm)return;
+  renderIcal();
   var m=Sy.meta;
   $('#metaInfo').textContent='Phiên bản dữ liệu #'+Sy.ver+(m&&m.updatedAt?'. Cập nhật lần cuối bởi '+m.updatedBy+' lúc '+dt(m.updatedAt)+'.':'.');
   api('listUsers').then(function(res){if(!res.ok)throw new Error(res.error);uiUsers=res.users;drawUsers()})
     .catch(function(err){if(err.auth)return handleErr(err);setMsg($('#userMsg'),err.message)});
 }
+var icsArm=false;
+function ago(ms){if(!ms)return 'chưa lần nào';var m=Math.round((Date.now()-ms)/60000);return m<1?'vừa xong':m<60?m+' phút trước':Math.round(m/60)+' giờ trước'}
+function drawExt(r){
+  $('#icsUrl').value=r.icsUrl||'';
+  $('#extStatus').innerHTML=r.sources.map(function(x){
+    var st=!x.has?'<span class="pill mute">Chưa nối</span>':x.ok?'<span class="pill good">Đang đọc được</span>':'<span class="pill bad">Lỗi</span>';
+    return '<div class="li"><div><b>'+esc(x.name)+'</b> '+st+'<div class="muted">'+(x.has?esc(x.host)+' · '+x.count+' đợt đặt · cập nhật '+ago(x.at)+(x.err?' · '+esc(x.err):''):'Dán địa chỉ iCal ở trên.')+'</div></div>'+(x.has?'<button class="btn ghost" type="button" data-exclear="'+x.id+'">Gỡ</button>':'')+'</div>';
+  }).join('')+(r.auto?'':'<div class="warnbox">Chưa bật tự cập nhật mỗi 30 phút. Trong Apps Script chạy hàm caiTuDongLich một lần (xem hướng dẫn).</div>');
+}
+function renderIcal(){
+  api('extInfo').then(function(r){if(!r.ok)throw new Error(r.error);drawExt(r)}).catch(function(err){
+    if(err.auth)return handleErr(err);
+    setMsg($('#extMsg'),'Máy chủ chưa hỗ trợ lịch Airbnb và Booking. Hãy cập nhật code Apps Script (bản 3.2 trở lên).');
+  });
+}
+function extCall(action,payload,okText){
+  setMsg($('#extMsg'),'Đang đọc lịch...',true);
+  return api(action,payload).then(function(r){
+    if(!r.ok)throw new Error(r.error||'Không thực hiện được');
+    drawExt(r);$('#exAirbnb').value='';$('#exBooking').value='';
+    var bad=r.sources.filter(function(x){return x.has&&!x.ok});
+    setMsg($('#extMsg'),bad.length?'Có nền tảng chưa đọc được: '+bad.map(function(x){return x.name+' ('+x.err+')'}).join('; '):okText,!bad.length);
+    return api('load',{extSince:0}).then(takeExt);
+  }).catch(function(err){if(err.auth)return handleErr(err);setMsg($('#extMsg'),err.message)});
+}
+$('#extForm').addEventListener('submit',function(e){
+  e.preventDefault();
+  var src=[];
+  if($('#exAirbnb').value.trim())src.push({id:'airbnb',url:$('#exAirbnb').value.trim()});
+  if($('#exBooking').value.trim())src.push({id:'booking',url:$('#exBooking').value.trim()});
+  if(!src.length){setMsg($('#extMsg'),'Hãy dán ít nhất một địa chỉ iCal.');return}
+  extCall('setExt',{sources:src},'Đã lưu và cập nhật lịch.');
+});
+$('#extSync').addEventListener('click',function(){extCall('syncExt',{},'Đã cập nhật lịch.')});
+$('#extStatus').addEventListener('click',function(e){var b=e.target.closest('[data-exclear]');if(b)extCall('setExt',{sources:[{id:b.dataset.exclear,url:''}]},'Đã gỡ nền tảng.')});
+$('#icsCopy').addEventListener('click',function(){var el=$('#icsUrl');el.select();try{navigator.clipboard.writeText(el.value).then(function(){bao('Đã sao chép địa chỉ lịch')},function(){document.execCommand('copy');bao('Đã sao chép')})}catch(x){document.execCommand('copy');bao('Đã sao chép')}});
+$('#icsRotate').addEventListener('click',function(){
+  if(!icsArm){icsArm=true;$('#icsRotate').textContent='Bấm lại để tạo mã mới (địa chỉ cũ sẽ ngừng hoạt động)';setTimeout(function(){icsArm=false;$('#icsRotate').textContent='Tạo lại mã lịch'},5000);return}
+  icsArm=false;$('#icsRotate').textContent='Tạo lại mã lịch';
+  api('rotateIcs').then(function(r){if(!r.ok)throw new Error(r.error);$('#icsUrl').value=r.icsUrl;bao('Đã tạo mã mới. Hãy dán địa chỉ mới vào Airbnb và Booking.')}).catch(function(err){if(err.auth)return handleErr(err);setMsg($('#extMsg'),err.message)});
+});
 function drawUsers(){
   $('#userList').innerHTML=uiUsers.map(function(u){
     var me=u.username===A.user;
