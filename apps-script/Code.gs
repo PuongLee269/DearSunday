@@ -18,7 +18,7 @@ var SETUP_CODE = "DOI-MA-NAY";
 // Chỉ lưu muối và mã băm, không lưu mật khẩu. Để trống nếu muốn tạo Admin bằng SETUP_CODE trên trang web.
 var SEED_USERS = [];
 
-var BUILD = "3";
+var BUILD = "3.1";
 var TOKEN_DAYS = 14;
 var HASH_ROUNDS = 150;
 var MAX_FAILS = 5;
@@ -26,7 +26,11 @@ var MAX_FAILS = 5;
 var MAX_DATA_CHARS = 90000;
 var CHUNK = 3000;
 
-function doGet() {
+// Mã bí mật nằm trong địa chỉ lịch iCal (?ics=MÃ) để Airbnb, Booking... đọc lịch. Đổi chuỗi này thì địa chỉ cũ ngừng hoạt động.
+var ICS_TOKEN = "DOI-MA-LICH";
+
+function doGet(e) {
+  if (e && e.parameter && e.parameter.ics !== undefined) return ics_(String(e.parameter.ics));
   try {
     return out_({ ok: true, service: "DearSunday", build: BUILD, hasUsers: readUsers_().length > 0 });
   } catch (err) {
@@ -454,4 +458,53 @@ function deleteUser_(req) {
     );
     return { ok: true, users: publicUsers_() };
   });
+}
+
+/* ---------- lịch iCal cho Airbnb, Booking ---------- */
+
+// Chỉ xuất ngày bị chặn, không có tên, số điện thoại, giá hay ghi chú của khách.
+function icsDate_(d) {
+  return d.replace(/-/g, "");
+}
+
+function icsAddDay_(d) {
+  var t = new Date(d + "T00:00:00Z");
+  t.setUTCDate(t.getUTCDate() + 1);
+  return t.toISOString().slice(0, 10);
+}
+
+function icsText_(token) {
+  var bookings = [];
+  var raw = readData_();
+  if (raw) {
+    try {
+      bookings = JSON.parse(raw).bookings || [];
+    } catch (err) {}
+  }
+  var stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+  var cut = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+  var L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//DearSunday//Lich//VI", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:Dear Sunday"];
+  bookings.forEach(function (b) {
+    if (!b || !b.id || !b.startAt || !b.endAt) return;
+    var s = String(b.startAt).slice(0, 10);
+    var e = String(b.endAt).slice(0, 10);
+    if (e < cut) return;
+    if (e <= s) e = icsAddDay_(s); // gói trong ngày chặn cả ngày đó
+    L.push("BEGIN:VEVENT", "UID:" + String(b.id).replace(/[^A-Za-z0-9_-]/g, "") + "@dearsunday", "DTSTAMP:" + stamp,
+      "DTSTART;VALUE=DATE:" + icsDate_(s), "DTEND;VALUE=DATE:" + icsDate_(e), "SUMMARY:Dear Sunday - da dat", "TRANSP:OPAQUE", "END:VEVENT");
+  });
+  L.push("END:VCALENDAR");
+  return L.join("\r\n") + "\r\n";
+}
+
+function ics_(token) {
+  if (ICS_TOKEN === "DOI-MA-LICH" || token !== ICS_TOKEN) {
+    return out_({ ok: false, service: "DearSunday", build: BUILD, error: "Địa chỉ lịch không đúng" });
+  }
+  return ContentService.createTextOutput(icsText_(token)).setMimeType(ContentService.MimeType.ICAL);
+}
+
+// Chạy trong editor để xem địa chỉ lịch cần dán vào Airbnb, Booking.
+function layLinkLich() {
+  Logger.log(ScriptApp.getService().getUrl() + "?ics=" + ICS_TOKEN);
 }

@@ -34,3 +34,15 @@ Kho Script Properties tối đa 500 KB, script giới hạn dữ liệu cả hom
 - Người sở hữu tài khoản Google chạy script xem được toàn bộ dữ liệu (trong Cài đặt dự án của Apps Script).
 - Mọi tài khoản (cả nhân viên) xem được khách hàng, đặt phòng và tài chính. Chỉ mục Cài đặt là riêng của Admin.
 - Kiểm tra thông tin khách bằng AI, mã khóa thông minh và gửi email trong app hiện vẫn là giả lập.
+
+## Lịch iCal cho Airbnb, Booking (build 3.1)
+
+Script có địa chỉ lịch chỉ-đọc để nền tảng đặt phòng nhập vào và chặn ngày:
+
+`<URL /exec>?ics=<ICS_TOKEN>`
+
+- Đặt `ICS_TOKEN` (chuỗi bí mật dài, không đưa lên GitHub) trong script rồi triển khai phiên bản mới. Đổi chuỗi này thì địa chỉ cũ ngừng hoạt động.
+- Chạy hàm `layLinkLich` trong editor để xem địa chỉ đầy đủ.
+- Lịch chỉ có ngày bị chặn ("da dat"), không có tên, số điện thoại, giá hay ghi chú của khách. Gói qua đêm chặn các đêm từ ngày nhận đến ngày trả (ngày trả không bị chặn). Gói trong ngày và 4H chặn cả ngày đó.
+- Lịch lấy từ dữ liệu đã đồng bộ lên máy chủ, nên chỉ có các đặt phòng đã được đồng bộ. Nền tảng tự đọc lại sau vài giờ, không tức thời.
+- Chiều ngược lại (kéo lịch Airbnb/Booking về app) cần địa chỉ iCal xuất của họ và quyền gọi ra ngoài của script, chưa làm.
