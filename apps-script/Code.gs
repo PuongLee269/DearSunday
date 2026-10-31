@@ -18,7 +18,7 @@ var SETUP_CODE = "DOI-MA-NAY";
 // Chỉ lưu muối và mã băm, không lưu mật khẩu. Để trống nếu muốn tạo Admin bằng SETUP_CODE trên trang web.
 var SEED_USERS = [];
 
-var BUILD = "3.2";
+var BUILD = "3.3";
 var TOKEN_DAYS = 14;
 var HASH_ROUNDS = 150;
 var MAX_FAILS = 5;
@@ -71,7 +71,11 @@ var ACTIONS_ = {
   extInfo: extInfo_,
   setExt: setExt_,
   syncExt: syncExt_,
-  rotateIcs: rotateIcs_
+  rotateIcs: rotateIcs_,
+  ttInfo: ttInfo_,
+  ttSet: ttSet_,
+  ttPick: ttPick_,
+  ttCode: ttCode_
 };
 
 /* ---------- tiện ích ---------- */
@@ -352,7 +356,7 @@ function load_(req) {
   return withLock_(function () {
     var m = meta_();
     var x = extState_();
-    var extPart = { extAt: x.at };
+    var extPart = { extAt: x.at, tt: ttReady_() };
     if (Number(req.extSince) !== x.at) extPart.ext = x.events;
     if (req.since !== undefined && Number(req.since) === m.version) {
       return Object.assign({ ok: true, notModified: true, version: m.version }, extPart);
@@ -690,4 +694,199 @@ function caiTuDongLich() {
   ScriptApp.newTrigger("capNhatLichNgoai").timeBased().everyMinutes(30).create();
   fetchExt_();
   Logger.log("Đã bật tự cập nhật mỗi 30 phút.");
+}
+
+/* ---------- khóa thông minh TTLock: tự tạo mã vào cửa ---------- */
+// Dùng TTLock Open Platform (https://euopen.ttlock.com). Cần tài khoản nhà phát triển đã được duyệt (clientId, clientSecret)
+// và tài khoản app TTLock đang quản lý khóa. Mật khẩu TTLock chỉ lưu dạng MD5, không lưu mật khẩu gốc.
+var TT_HOST = "https://api.sciener.com";
+var TT_TZ = "+07:00";        // múi giờ Việt Nam: giờ trong đặt phòng là giờ địa phương
+var TT_LEAD_HOURS = 24;      // tự tạo mã khi còn tối đa số giờ này trước giờ nhận phòng
+var TT_GRACE_AFTER_H = 1;    // mã còn hiệu lực thêm số giờ này sau giờ trả phòng
+
+function md5_(s) {
+  return hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, s, Utilities.Charset.UTF_8));
+}
+
+function ttCfg_() {
+  var raw = props_().getProperty("TT_CFG");
+  return raw ? JSON.parse(raw) : {};
+}
+
+function ttSetCfg_(c) {
+  props_().setProperty("TT_CFG", JSON.stringify(c));
+}
+
+function ttReady_() {
+  var c = ttCfg_();
+  return !!(c.clientId && c.clientSecret && c.username && c.pwdMd5 && c.lockId);
+}
+
+function ttForm_(path, form) {
+  var r = UrlFetchApp.fetch(TT_HOST + path, { method: "post", payload: form, muteHttpExceptions: true });
+  var body = {};
+  try {
+    body = JSON.parse(r.getContentText());
+  } catch (err) {
+    fail_("tt", "TTLock trả về dữ liệu không đọc được (mã " + r.getResponseCode() + ")");
+  }
+  return body;
+}
+
+function ttToken_(force) {
+  var p = props_();
+  var c = ttCfg_();
+  var raw = p.getProperty("TT_TOKEN");
+  var t = raw ? JSON.parse(raw) : null;
+  if (!force && t && t.exp > Date.now() + 3600000) return t.access;
+  if (!c.clientId || !c.clientSecret || !c.username || !c.pwdMd5) fail_("tt", "Chưa nhập đủ thông tin TTLock");
+  var b = ttForm_("/oauth2/token", { clientId: c.clientId, clientSecret: c.clientSecret, username: c.username, password: c.pwdMd5 });
+  if (!b.access_token) fail_("tt", "TTLock từ chối đăng nhập: " + (b.errmsg || b.description || "kiểm tra lại thông tin") );
+  p.setProperty("TT_TOKEN", JSON.stringify({ access: b.access_token, exp: Date.now() + Number(b.expires_in || 0) * 1000 }));
+  return b.access_token;
+}
+
+// Gọi API có accessToken. Hết hạn token (mã 10004) thì xin token mới và thử lại một lần.
+function ttCall_(path, params, retried) {
+  var c = ttCfg_();
+  var form = Object.assign({ clientId: c.clientId, accessToken: ttToken_(!!retried), date: String(Date.now()) }, params || {});
+  var b = ttForm_(path, form);
+  if (b.errcode && b.errcode !== 0) {
+    if (b.errcode === 10004 && !retried) return ttCall_(path, params, true);
+    fail_("tt", "TTLock báo lỗi " + b.errcode + ": " + (b.errmsg || b.description || ""));
+  }
+  return b;
+}
+
+function ttLocks_() {
+  var b = ttCall_("/v3/lock/list", { pageNo: "1", pageSize: "100" });
+  return (b.list || []).map(function (l) {
+    return { lockId: l.lockId, alias: l.lockAlias || l.lockName, battery: l.electricQuantity, ver: l.keyboardPwdVersion, gateway: l.hasGateway };
+  });
+}
+
+function ttInfoOut_(locks) {
+  var c = ttCfg_();
+  var out = { ok: true, ready: ttReady_(), username: c.username || "", hasClient: !!(c.clientId && c.clientSecret), lockId: c.lockId || null, alias: c.alias || "", auto: ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === "tuTaoMaKhoa"; }) };
+  if (locks) out.locks = locks;
+  return out;
+}
+
+function ttInfo_(req) {
+  auth_(req, true);
+  return ttInfoOut_(null);
+}
+
+// Lưu thông tin (để trống ô nào thì giữ giá trị cũ), đăng nhập thử và trả danh sách khóa để chọn.
+function ttSet_(req) {
+  auth_(req, true);
+  var c = ttCfg_();
+  if (req.clientId) c.clientId = String(req.clientId).trim();
+  if (req.clientSecret) c.clientSecret = String(req.clientSecret).trim();
+  if (req.username) c.username = String(req.username).trim();
+  if (req.password) c.pwdMd5 = md5_(String(req.password));
+  props_().deleteProperty("TT_TOKEN");
+  ttSetCfg_(c);
+  var locks = ttLocks_();
+  return ttInfoOut_(locks);
+}
+
+function ttPick_(req) {
+  auth_(req, true);
+  var locks = ttLocks_();
+  var l = locks.filter(function (x) { return String(x.lockId) === String(req.lockId); })[0];
+  if (!l) fail_("bad", "Không tìm thấy khóa này trong tài khoản TTLock");
+  var c = ttCfg_();
+  c.lockId = l.lockId;
+  c.alias = l.alias;
+  c.ver = l.ver || 4;
+  ttSetCfg_(c);
+  return ttInfoOut_(locks);
+}
+
+function ttMs_(local) {
+  return new Date(String(local) + ":00" + TT_TZ).getTime();
+}
+
+// Tạo mã theo khoảng thời gian (loại 3). TTLock làm tròn theo giờ: bắt đầu làm tròn xuống, kết thúc làm tròn lên.
+function ttMakeCode_(startAt, endAt, name) {
+  var c = ttCfg_();
+  var H = 3600000;
+  var s = Math.floor(ttMs_(startAt) / H) * H;
+  var e = Math.ceil((ttMs_(endAt) + TT_GRACE_AFTER_H * H) / H) * H;
+  if (!(e > s)) fail_("bad", "Giờ trả phòng phải sau giờ nhận phòng");
+  var b = ttCall_("/v3/keyboardPwd/get", {
+    lockId: String(c.lockId), keyboardPwdVersion: String(c.ver || 4), keyboardPwdType: "3",
+    keyboardPwdName: String(name || "Dear Sunday").slice(0, 30), startDate: String(s), endDate: String(e)
+  });
+  if (!b.keyboardPwd) fail_("tt", "TTLock không trả về mã");
+  return { code: String(b.keyboardPwd), codeId: b.keyboardPwdId, from: s, to: e };
+}
+
+// Ghi thay đổi vào dữ liệu đồng bộ từ phía máy chủ (tăng phiên bản để các máy tự nhận).
+function mutateData_(fn) {
+  return withLock_(function () {
+    var raw = readData_();
+    var data = raw ? JSON.parse(raw) : null;
+    if (!data) fail_("bad", "Chưa có dữ liệu đồng bộ trên máy chủ");
+    var res = fn(data);
+    var str = JSON.stringify(data);
+    if (str.length > MAX_DATA_CHARS) fail_("big", "Dữ liệu quá lớn");
+    writeData_(str);
+    var m = meta_();
+    setMeta_({ version: m.version + 1, updatedAt: Date.now(), updatedBy: "ttlock" });
+    return res;
+  });
+}
+
+function applyCode_(b, r) {
+  b.code = r.code;
+  b.codeId = r.codeId;
+  b.codeFrom = r.from;
+  b.codeTo = r.to;
+}
+
+function ttCode_(req) {
+  auth_(req);
+  if (!ttReady_()) fail_("bad", "Chưa kết nối khóa TTLock. Admin vào Cài đặt để kết nối.");
+  var id = String(req.bookingId || "");
+  var snap = JSON.parse(readData_() || "{}");
+  var b0 = (snap.bookings || []).filter(function (x) { return x.id === id; })[0];
+  if (!b0) fail_("bad", "Chưa tìm thấy đặt phòng này trên máy chủ. Hãy đợi đồng bộ rồi thử lại.");
+  var r = ttMakeCode_(b0.startAt, b0.endAt, b0.name);
+  mutateData_(function (d) {
+    var b = (d.bookings || []).filter(function (x) { return x.id === id; })[0];
+    if (b) applyCode_(b, r);
+  });
+  return { ok: true, code: r.code, from: r.from, to: r.to };
+}
+
+// Bộ hẹn giờ mỗi giờ: tạo mã cho đặt phòng sắp nhận (trong TT_LEAD_HOURS giờ tới) mà chưa có mã.
+function tuTaoMaKhoa() {
+  if (!ttReady_()) return;
+  var snap = JSON.parse(readData_() || "{}");
+  var now = Date.now();
+  (snap.bookings || []).forEach(function (b0) {
+    if (b0.code || !b0.startAt || !b0.endAt) return;
+    var s = ttMs_(b0.startAt), e = ttMs_(b0.endAt);
+    if (e <= now || s - now > TT_LEAD_HOURS * 3600000) return;
+    try {
+      var r = ttMakeCode_(b0.startAt, b0.endAt, b0.name);
+      mutateData_(function (d) {
+        var b = (d.bookings || []).filter(function (x) { return x.id === b0.id; })[0];
+        if (b && !b.code) applyCode_(b, r);
+      });
+    } catch (err) {
+      console.error("Không tạo được mã cho " + b0.id + ": " + err.message);
+    }
+  });
+}
+
+// Chạy một lần trong editor để bật tự tạo mã mỗi giờ (Google sẽ hỏi cấp quyền hẹn giờ).
+function caiTuDongMaKhoa() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === "tuTaoMaKhoa") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("tuTaoMaKhoa").timeBased().everyHours(1).create();
+  Logger.log("Đã bật tự tạo mã vào cửa mỗi giờ.");
 }

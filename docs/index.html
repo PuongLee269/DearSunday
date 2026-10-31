@@ -419,6 +419,23 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
         <div class="row"><button class="btn ghost" type="button" id="icsCopy">Sao chép</button><button class="btn ghost" type="button" id="icsRotate">Tạo lại mã lịch</button></div>
       </div>
     </div>
+    <div class="panel stack" id="ttPanel">
+      <h3 style="margin:0">Khóa thông minh TTLock</h3>
+      <p class="muted" style="margin:0">Tự tạo mã vào cửa cho từng đặt phòng. Cần tài khoản nhà phát triển TTLock đã được duyệt (đăng ký ở euopen.ttlock.com/register) để có Client ID và Client Secret, cùng tài khoản app TTLock đang quản lý khóa. Mật khẩu TTLock chỉ được lưu dạng mã băm MD5 trên máy chủ.</p>
+      <form id="ttForm" class="stack">
+        <div class="two"><label class="f">Client ID<input type="text" id="ttCid" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+        <label class="f">Client Secret<input type="password" id="ttSec" autocomplete="off"></label></div>
+        <div class="two"><label class="f">Tài khoản app TTLock<input type="text" id="ttUser" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+        <label class="f">Mật khẩu app TTLock<input type="password" id="ttPass" autocomplete="off"></label></div>
+        <div id="ttMsg" class="warnbox" hidden></div>
+        <div><button class="btn">Kết nối và lấy danh sách khóa</button></div>
+      </form>
+      <div id="ttPick" class="stack" hidden>
+        <label class="f">Khóa cửa<select id="ttLock" style="width:100%"></select></label>
+        <div><button class="btn" id="ttPickBtn" type="button">Dùng khóa này</button></div>
+      </div>
+      <div id="ttStatus" class="muted"></div>
+    </div>
     <div class="panel stack" id="dataPanel">
       <h3 style="margin:0">Dữ liệu</h3>
       <div id="metaInfo" class="muted"></div>
@@ -549,7 +566,7 @@ var GOI_BY={};GOI.forEach(function(g){GOI_BY[g.id]=g});
 /* lịch đặt từ Airbnb, Booking: coi như "gói" riêng chỉ để hiển thị, không đưa vào danh sách chọn gói */
 var EXT_SRC={airbnb:{id:'ext_airbnb',ten:'Airbnb',kieu:'dem',don:90,mau:'#ff8fa3',vao:'14:00',ra:'11:00'},booking:{id:'ext_booking',ten:'Booking.com',kieu:'dem',don:90,mau:'#8fb6ff',vao:'14:00',ra:'11:00'}};
 Object.keys(EXT_SRC).forEach(function(k){GOI_BY[EXT_SRC[k].id]=EXT_SRC[k]});
-var EXT={at:0,events:[]};
+var EXT={at:0,events:[]}, TT=false;
 try{var _x=JSON.parse(lsGet(EXT_KEY)||'null');if(_x&&Array.isArray(_x.events))EXT=_x}catch(e){}
 function GP(id){return (S&&S.prices&&S.prices[id])||{gia:0,ghi:''}}
 function gioBatDau(g){var out=[],m=tomin(g.tu),e=tomin(g.den);for(;m<=e;m+=30)out.push(pad2(Math.floor(m/60))+':'+pad2(m%60));return out}
@@ -825,8 +842,8 @@ function bookingRow(b){
   var g=GOI_BY[b.pkg],n=diffDays(dateOf(b.startAt),dateOf(b.endAt)),cl=xungDot(b,b.id).length,arm=armDel===b.id;
   return '<div class="res bk" style="border-left-color:'+g.mau+'"><div class="bar"><div>'+chipGoi(b)+' <b>'+esc(b.name)+'</b></div>'+(cl?'<span class="pill bad">Trùng lịch</span>':'')+'</div>'+
     '<div>'+WD[dow(dateOf(b.startAt))]+' '+fdy(dateOf(b.startAt))+' · '+khoang(b)+(g.kieu==='dem'?' · '+n+' đêm':'')+'</div>'+
-    payRow(b)+(b.phone?'<div>'+esc(b.phone)+'</div>':'')+(b.note?'<div>'+esc(b.note)+'</div>':'')+
-    '<div class="bar" style="justify-content:flex-start">'+payBtns(b)+'<button class="btn ghost" data-bkedit="'+b.id+'">Sửa</button><button class="btn ghost'+(arm?' danger':'')+'" data-bkdel="'+b.id+'">'+(arm?'Bấm lại để xóa':'Xóa')+'</button></div></div>';
+    payRow(b)+codeRow(b)+(b.phone?'<div>'+esc(b.phone)+'</div>':'')+(b.note?'<div>'+esc(b.note)+'</div>':'')+
+    '<div class="bar" style="justify-content:flex-start">'+payBtns(b)+codeBtns(b)+'<button class="btn ghost" data-bkedit="'+b.id+'">Sửa</button><button class="btn ghost'+(arm?' danger':'')+'" data-bkdel="'+b.id+'">'+(arm?'Bấm lại để xóa':'Xóa')+'</button></div></div>';
 }
 function availHtml(d){
   return '<div class="avail">'+GOI.map(function(g){
@@ -1025,6 +1042,30 @@ function payRow(b){
   var st=payState(b),a=b.paidAmt||0;
   return '<div><b>'+money(b.price)+'</b> '+(st==='full'?'<span class="pill good">Đã thanh toán đủ</span>':st==='deposit'?'<span class="pill warn">Đã tạm ứng '+money(a)+'</span>':'<span class="pill bad">Chưa thu</span>')+'</div>';
 }
+function codeRow(b){
+  if(b.ext)return '';
+  if(b.code)return '<div>Mã vào cửa: <b class="code">'+esc(b.code)+'</b> <span class="muted">đến '+esc(dt(b.codeTo))+'</span></div>';
+  return '';
+}
+function codeBtns(b){
+  if(b.ext)return '';
+  if(b.code)return '<button class="btn ghost" data-ttmsg="'+b.id+'">Sao chép tin nhắn mã</button>';
+  return TT?'<button class="btn ghost" data-ttcode="'+b.id+'">Tạo mã vào cửa</button>':'';
+}
+function makeCode(id,btn){
+  if(MODE!=='cloud'){bao('Cần đăng nhập và đồng bộ để tạo mã');return}
+  btn.disabled=true;btn.textContent='Đang tạo mã...';
+  (isDirty()?push():Promise.resolve()).then(function(){return api('ttCode',{bookingId:id})}).then(function(r){
+    if(!r.ok)throw new Error(r.error||'Không tạo được mã');
+    bao('Đã tạo mã '+r.code);return pull();
+  }).catch(function(err){if(err.auth)return handleErr(err);bao(err.message);btn.disabled=false;btn.textContent='Tạo mã vào cửa'});
+}
+function copyCodeMsg(id){
+  var b=find(S.bookings,id);if(!b||!b.code)return;
+  var txt='Xin chào '+b.name+', mã mở cửa của bạn là '+b.code+'. Mã có hiệu lực từ '+dt(b.codeFrom)+' đến '+dt(b.codeTo)+'.';
+  var done=function(){bao('Đã sao chép tin nhắn')};
+  try{navigator.clipboard.writeText(txt).then(done,function(){bao(txt)})}catch(e){bao(txt)}
+}
 function payBtns(b){
   if(!b.price)return '';
   var st=payState(b);
@@ -1129,7 +1170,7 @@ function bao(msg){var t=$('#toast');t.textContent=msg;t.classList.add('show');cl
 
 /* ============ sự kiện ============ */
 document.addEventListener('click',function(e){
-  var t=e.target.closest('[data-t],[data-go],[data-act],[data-guest],[data-view],[data-pick],[data-goday],[data-calnav],[data-calmode],[data-bkedit],[data-bkdel],[data-newbk],[data-newpkg],[data-uact],[data-qd],[data-dstep],[data-pkg],[data-nights],[data-flex],[data-resettime],[data-reprice],[data-fm],[data-pay],[data-fpay],[data-fin],[data-finnav]');
+  var t=e.target.closest('[data-t],[data-go],[data-act],[data-guest],[data-view],[data-pick],[data-goday],[data-calnav],[data-calmode],[data-bkedit],[data-bkdel],[data-newbk],[data-newpkg],[data-uact],[data-qd],[data-dstep],[data-pkg],[data-nights],[data-flex],[data-resettime],[data-reprice],[data-ttcode],[data-ttmsg],[data-fm],[data-pay],[data-fpay],[data-fin],[data-finnav]');
   if(!t)return;
   var d=t.dataset, id=d.id;
   if(d.t){show(d.t);return}
@@ -1143,6 +1184,8 @@ document.addEventListener('click',function(e){
   if(d.nights){F.nights=Math.min(30,Math.max(1,F.nights+ +d.nights));renderForm();return}
   if(d.flex){F.start=d.flex;renderForm();return}
   if(d.reprice){F.touched=false;renderPrice();return}
+  if(d.ttcode){makeCode(d.ttcode,t);return}
+  if(d.ttmsg){copyCodeMsg(d.ttmsg);return}
   if(d.fpay){F.pay=d.fpay;renderPrice();return}
   if(d.pay){var pp=d.pay.split(':');applyPay(find(S.bookings,pp[0]),pp[1]);save();renderAll();return}
   if(d.fin){finMode=d.fin;finRef=new Date();renderFin();return}
@@ -1371,6 +1414,7 @@ function initialSync(){
   }).catch(handleErr);
 }
 function takeExt(res){
+  if(res&&res.tt!==undefined&&!!res.tt!==TT){TT=!!res.tt;renderAll()}
   if(!res||res.ext===undefined)return;
   EXT={at:res.extAt||0,events:res.ext||[]};
   try{localStorage.setItem(EXT_KEY,JSON.stringify(EXT))}catch(e){}
@@ -1531,15 +1575,47 @@ $('#aiDown').addEventListener('click',function(){
 function renderSettings(){
   showAi();
   var adm=MODE==='cloud'&&A.role==='admin';
-  $('#userPanel').hidden=!adm;$('#icalPanel').hidden=!adm;$('#dataPanel').hidden=!adm;
+  $('#userPanel').hidden=!adm;$('#icalPanel').hidden=!adm;$('#ttPanel').hidden=!adm;$('#dataPanel').hidden=!adm;
   renderPriceTab();
   if(!adm)return;
-  renderIcal();
+  renderIcal();renderTt();
   var m=Sy.meta;
   $('#metaInfo').textContent='Phiên bản dữ liệu #'+Sy.ver+(m&&m.updatedAt?'. Cập nhật lần cuối bởi '+m.updatedBy+' lúc '+dt(m.updatedAt)+'.':'.');
   api('listUsers').then(function(res){if(!res.ok)throw new Error(res.error);uiUsers=res.users;drawUsers()})
     .catch(function(err){if(err.auth)return handleErr(err);setMsg($('#userMsg'),err.message)});
 }
+function drawTt(r){
+  $('#ttCid').placeholder=r.hasClient?'Đã lưu, để trống để giữ':'';$('#ttSec').placeholder=r.hasClient?'Đã lưu, để trống để giữ':'';
+  $('#ttUser').value=r.username||'';
+  $('#ttStatus').innerHTML=r.ready?'Đã kết nối khóa <b>'+esc(r.alias)+'</b>. Tự tạo mã trước nhận phòng 24 giờ: '+(r.auto?'<b>đang bật</b>.':'chưa bật. Trong Apps Script chạy hàm caiTuDongMaKhoa một lần. Hiện bạn vẫn bấm "Tạo mã vào cửa" ở từng đặt phòng được.'):(r.hasClient?'Đã lưu thông tin, chưa chọn khóa.':'Chưa kết nối.');
+  if(r.locks){
+    $('#ttLock').innerHTML=r.locks.map(function(l){return '<option value="'+l.lockId+'"'+(String(l.lockId)===String(r.lockId)?' selected':'')+'>'+esc(l.alias)+' (pin '+(l.battery==null?'?':l.battery)+'%)</option>'}).join('');
+    $('#ttPick').hidden=!r.locks.length;
+    if(!r.locks.length)setMsg($('#ttMsg'),'Tài khoản TTLock này chưa có khóa nào.');
+  }
+}
+function renderTt(){
+  api('ttInfo').then(function(r){if(!r.ok)throw new Error(r.error);drawTt(r)}).catch(function(err){
+    if(err.auth)return handleErr(err);
+    setMsg($('#ttMsg'),'Máy chủ chưa hỗ trợ TTLock. Hãy cập nhật code Apps Script (bản 3.3 trở lên).');
+  });
+}
+$('#ttForm').addEventListener('submit',function(e){
+  e.preventDefault();
+  setMsg($('#ttMsg'),'Đang kết nối TTLock...',true);
+  api('ttSet',{clientId:$('#ttCid').value.trim(),clientSecret:$('#ttSec').value.trim(),username:$('#ttUser').value.trim(),password:$('#ttPass').value}).then(function(r){
+    if(!r.ok)throw new Error(r.error||'Không kết nối được');
+    $('#ttCid').value='';$('#ttSec').value='';$('#ttPass').value='';
+    setMsg($('#ttMsg'),'Kết nối thành công. Hãy chọn khóa cửa.',true);drawTt(r);
+  }).catch(function(err){if(err.auth)return handleErr(err);setMsg($('#ttMsg'),err.message)});
+});
+$('#ttPickBtn').addEventListener('click',function(){
+  api('ttPick',{lockId:$('#ttLock').value}).then(function(r){
+    if(!r.ok)throw new Error(r.error||'Không chọn được khóa');
+    setMsg($('#ttMsg'),'Đã chọn khóa. Từ giờ có nút "Tạo mã vào cửa" ở mỗi đặt phòng.',true);drawTt(r);
+    return api('load',{extSince:0}).then(takeExt);
+  }).catch(function(err){if(err.auth)return handleErr(err);setMsg($('#ttMsg'),err.message)});
+});
 var icsArm=false;
 function ago(ms){if(!ms)return 'chưa lần nào';var m=Math.round((Date.now()-ms)/60000);return m<1?'vừa xong':m<60?m+' phút trước':Math.round(m/60)+' giờ trước'}
 function drawExt(r){
