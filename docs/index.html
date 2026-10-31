@@ -405,10 +405,7 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
     <div class="panel stack" id="dataPanel">
       <h3 style="margin:0">Dữ liệu</h3>
       <div id="metaInfo" class="muted"></div>
-      <p class="muted" style="margin:0" id="bkpNote">Dữ liệu lưu trong trình duyệt của máy này. Muốn chuyển sang máy khác hoặc phòng mất dữ liệu: tải bản sao lưu rồi khôi phục ở máy kia.</p>
-      <div class="row"><button class="btn ghost" id="exportBtn">Tải bản sao lưu (JSON)</button><button class="btn ghost" id="importBtn">Khôi phục từ file</button></div>
-      <input type="file" id="importFile" accept="application/json,.json" hidden>
-      <div id="importMsg" class="warnbox" hidden></div>
+      <div><button class="btn ghost" id="exportBtn">Tải bản sao lưu (JSON)</button></div>
     </div>
   </div></section>
 
@@ -482,7 +479,7 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
 <script>
 /* ============ cấu hình ============ */
 // Dán địa chỉ Web App (kết thúc bằng /exec) vào đây để mọi máy dùng chung, không phải nhập lại.
-var CONFIG={API_URL:''};
+var CONFIG={API_URL:'https://script.google.com/macros/s/AKfycbw-eAIdCCp4bF2ndDLhYWxho9tlHa7PH7Kd1PmYNeZggs8ikzlqWXSP0p2Kt2Ep_HtMYw/exec'};
 
 var KEY='dearsunday-v2', BASE_KEY='dearsunday-base', AUTH_KEY='dearsunday-auth', URL_KEY='dearsunday-api', DEMO_KEY='dearsunday-demo', CAL_KEY='dearsunday-calmode';
 var DAY=86400000, H=3600000;
@@ -1501,7 +1498,7 @@ $('#aiDown').addEventListener('click',function(){
 function renderSettings(){
   showAi();
   var adm=MODE==='cloud'&&A.role==='admin';
-  $('#userPanel').hidden=!adm;$('#dataPanel').hidden=!(adm||MODE!=='cloud');
+  $('#userPanel').hidden=!adm;$('#dataPanel').hidden=!adm;
   renderPriceTab();
   if(!adm)return;
   var m=Sy.meta;
@@ -1548,20 +1545,6 @@ $('#userForm').addEventListener('submit',function(e){
     $('#uName').value='';$('#uPass').value='';
   });
 });
-$('#importBtn').addEventListener('click',function(){$('#importFile').click()});
-$('#importFile').addEventListener('change',function(){
-  var f=this.files[0];this.value='';if(!f)return;
-  var r=new FileReader();
-  r.onload=function(){
-    try{
-      var o=JSON.parse(r.result);
-      if(!o||typeof o!=='object'||!Array.isArray(o.bookings))throw 0;
-      if(!confirm('Thay toàn bộ dữ liệu trên máy này bằng bản sao lưu? Dữ liệu hiện tại sẽ mất (hãy tải bản sao lưu trước nếu cần).'))return;
-      S=normalize(o);save();renderAll();setMsg($('#importMsg'),'Đã khôi phục '+S.bookings.length+' đặt phòng.',true);
-    }catch(e){setMsg($('#importMsg'),'File không đúng định dạng bản sao lưu của DearSunday.')}
-  };
-  r.readAsText(f);
-});
 $('#exportBtn').addEventListener('click',function(){
   var blob=new Blob([JSON.stringify(plain(),null,2)],{type:'application/json'});
   var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dearsunday-sao-luu-'+today()+'.json';
@@ -1570,12 +1553,11 @@ $('#exportBtn').addEventListener('click',function(){
 
 /* ============ khởi động ============ */
 (function boot(){
-  /* không đăng nhập: dữ liệu nằm trong trình duyệt của máy này. Đặt CONFIG.API_URL để bật lại đăng nhập và đồng bộ. */
-  var url=CONFIG.API_URL, saved=null;
+  var url=apiUrl(), saved=null;
   try{saved=JSON.parse(lsGet(AUTH_KEY)||'null')}catch(e){}
   if(url&&saved&&saved.token){A={url:url,token:saved.token,user:saved.user,role:saved.role};startCloud();return}
-  if(url){showAuth();return}
-  startLocal();
+  if(!url&&lsGet(DEMO_KEY)==='1'){startLocal();return}
+  showAuth();
 })();
 </script>
 </body>
