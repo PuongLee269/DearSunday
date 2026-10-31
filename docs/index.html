@@ -221,26 +221,32 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
   <div class="authbox">
     <div>
       <div class="brand">Dear Sunday</div>
-      <p class="muted" style="margin-top:4px" id="authSub">Đăng nhập bằng tài khoản do quản trị viên cấp.</p>
+      <p class="muted" style="margin-top:4px" id="authSub">Nhập mã đồng bộ để dùng chung dữ liệu giữa các máy. Chỉ cần nhập một lần trên mỗi máy.</p>
     </div>
     <form id="loginForm" class="stack">
-      <label class="f" id="urlRow" hidden>Địa chỉ máy chủ<input type="text" id="auUrl" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
-      <label class="f">Tên đăng nhập<input type="text" id="auUser" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
-      <label class="f">Mật khẩu<input type="password" id="auPass" autocomplete="current-password" required></label>
+      <label class="f">Mã đồng bộ<input type="password" id="auKey" autocomplete="off" autocapitalize="none" spellcheck="false" required></label>
       <div id="auMsg" class="warnbox" hidden></div>
-      <button class="btn big" id="auBtn">Đăng nhập</button>
-    </form>
-    <form id="setupForm" class="stack" hidden>
-      <p>Máy chủ chưa có tài khoản nào. Tạo tài khoản Admin đầu tiên bằng mã thiết lập (SETUP_CODE) trong script.</p>
-      <label class="f">Mã thiết lập<input type="password" id="suCode" autocomplete="off" required></label>
-      <label class="f">Tên đăng nhập Admin<input type="text" id="suUser" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
-      <label class="f">Mật khẩu (tối thiểu 6 ký tự)<input type="password" id="suPass" autocomplete="new-password" required></label>
-      <div id="suMsg" class="warnbox" hidden></div>
-      <button class="btn big" id="suBtn">Tạo tài khoản Admin</button>
+      <button class="btn big" id="auBtn">Kết nối</button>
     </form>
     <div class="bar" style="justify-content:flex-start">
-      <button class="linkbtn" id="auToggle" type="button">Lần đầu cài đặt? Tạo Admin</button>
-      <button class="linkbtn" id="auDemo" type="button" hidden>Dùng thử trên máy này (không đồng bộ)</button>
+      <button class="linkbtn" id="auDemo" type="button">Dùng riêng trên máy này (không đồng bộ)</button>
+    </div>
+  </div>
+</div>
+
+<div class="auth" id="pinSheet" hidden>
+  <div class="authbox">
+    <h2 id="pinTitle">Mã PIN Admin</h2>
+    <form id="pinForm" class="stack">
+      <p class="muted" id="pinHelp" style="margin:0"></p>
+      <label class="f"><span id="pinLbl">Mã PIN</span><input type="password" id="pinIn" inputmode="numeric" autocomplete="off" required></label>
+      <label class="f" id="pinRow2" hidden>Nhập lại mã PIN<input type="password" id="pinIn2" inputmode="numeric" autocomplete="off"></label>
+      <div id="pinMsg" class="warnbox" hidden></div>
+      <button class="btn big" id="pinOk">Mở</button>
+    </form>
+    <div class="bar" style="justify-content:flex-start">
+      <button class="linkbtn" id="pinForgot" type="button">Quên mã PIN?</button>
+      <button class="linkbtn" id="pinCancel" type="button">Hủy</button>
     </div>
   </div>
 </div>
@@ -249,9 +255,8 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
   <div class="top">
     <h1 class="brand">Dear Sunday</h1>
     <div class="who" id="who" hidden>
-      <span id="syncChip" class="pill mute" role="status">...</span>
-      <button class="btn ghost" id="whoBtn" data-t="account" title="Tài khoản của tôi"></button>
-      <button class="btn ghost" id="logoutBtn">Đăng xuất</button>
+      <span id="syncChip" class="pill mute" role="status" hidden>...</span>
+      <button class="btn ghost" id="adminBtn">Admin</button>
     </div>
   </div>
   <nav role="tablist" id="tabs">
@@ -268,10 +273,6 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
 <div class="wrap"><main>
 
   <section id="home"><div class="stack">
-    <div id="weakWarn" class="warnbox bar" hidden>
-      <span>Tài khoản đang dùng mật khẩu mặc định. Hãy đổi mật khẩu để bảo vệ dữ liệu khách.</span>
-      <button class="btn ghost" data-t="account">Đổi mật khẩu</button>
-    </div>
     <div id="todayStrip"></div>
 
     <div class="panel">
@@ -386,21 +387,22 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
       <div class="row"><button class="btn" id="aiCopy">Sao chép</button><button class="btn ghost" id="aiDown">Tải file .txt</button></div>
       <textarea id="aiText" readonly rows="8" aria-label="Dữ liệu xuất"></textarea>
     </div>
-    <div class="panel stack" id="userPanel">
-      <h3 style="margin:0">Tài khoản người dùng</h3>
-      <p class="muted">Chỉ Admin nhìn thấy mục này. Mọi người dùng đăng nhập bằng tài khoản do bạn cấp, dữ liệu đồng bộ tự động giữa các máy.</p>
-      <div id="userList" class="list"></div>
-      <form id="userForm" class="stack" style="border-top:3px dashed var(--brown);padding-top:12px">
-        <h3 style="margin:0">Cấp tài khoản mới</h3>
+    <div class="panel stack" id="pinPanel">
+      <h3 style="margin:0">Mã PIN Admin</h3>
+      <p class="muted" style="margin:0">Mã PIN lưu riêng trên từng máy, dùng để mở mục Cài đặt. Nếu quên PIN, bấm "Quên mã PIN?" ở màn hình nhập PIN.</p>
+      <form id="pinChange" class="stack">
         <div class="two">
-          <label class="f">Tên đăng nhập<input type="text" id="uName" autocapitalize="none" spellcheck="false" autocomplete="off" required></label>
-          <label class="f">Mật khẩu (tối thiểu 6 ký tự)<input type="text" id="uPass" autocomplete="off" required></label>
+          <label class="f">PIN hiện tại<input type="password" id="pcOld" inputmode="numeric" autocomplete="off" required></label>
+          <label class="f">PIN mới (từ 4 ký tự)<input type="password" id="pcNew" inputmode="numeric" autocomplete="off" required></label>
         </div>
-        <label class="f">Vai trò<select id="uRole" style="width:100%"><option value="staff">Nhân viên</option><option value="admin">Admin (toàn quyền)</option></select></label>
-        <div class="muted">Nhân viên dùng được toàn bộ app nhưng không nhìn thấy mục Cài đặt.</div>
-        <div id="userMsg" class="warnbox" hidden></div>
-        <div><button class="btn">Cấp tài khoản</button></div>
+        <div id="pcMsg" class="warnbox" hidden></div>
+        <div class="row"><button class="btn">Đổi PIN</button><button class="btn ghost" type="button" id="admLock">Khóa Admin</button></div>
       </form>
+    </div>
+    <div class="panel stack" id="syncPanel">
+      <h3 style="margin:0">Đồng bộ</h3>
+      <p class="muted" style="margin:0" id="syncInfo"></p>
+      <div><button class="btn ghost" id="logoutBtn">Ngắt kết nối máy này</button> <button class="btn ghost" id="connectBtn">Kết nối đồng bộ</button></div>
     </div>
     <div class="panel stack" id="dataPanel">
       <h3 style="margin:0">Dữ liệu</h3>
@@ -412,16 +414,6 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
     </div>
   </div></section>
 
-  <section id="account" hidden><div class="stack">
-    <h2>Tài khoản của tôi</h2>
-    <form class="panel stack" id="pwForm">
-      <div id="meInfo" class="muted"></div>
-      <label class="f">Mật khẩu hiện tại<input type="password" id="pwOld" autocomplete="current-password" required></label>
-      <label class="f">Mật khẩu mới (tối thiểu 6 ký tự)<input type="password" id="pwNew" autocomplete="new-password" required></label>
-      <div id="pwMsg" class="warnbox" hidden></div>
-      <div><button class="btn">Đổi mật khẩu</button></div>
-    </form>
-  </div></section>
 
 </main></div>
 
@@ -482,7 +474,7 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
 <script>
 /* ============ cấu hình ============ */
 // Dán địa chỉ Web App (kết thúc bằng /exec) vào đây để mọi máy dùng chung, không phải nhập lại.
-var CONFIG={API_URL:''};
+var CONFIG={API_URL:'https://script.google.com/macros/s/AKfycbw-eAIdCCp4bF2ndDLhYWxho9tlHa7PH7Kd1PmYNeZggs8ikzlqWXSP0p2Kt2Ep_HtMYw/exec'};
 
 var KEY='dearsunday-v2', BASE_KEY='dearsunday-base', AUTH_KEY='dearsunday-auth', URL_KEY='dearsunday-api', DEMO_KEY='dearsunday-demo', CAL_KEY='dearsunday-calmode';
 var DAY=86400000, H=3600000;
@@ -1078,14 +1070,12 @@ function setView(v){
   $('#vPlants').setAttribute('aria-pressed',v==='plants');$('#vToys').setAttribute('aria-pressed',v==='toys');
 }
 function renderAll(){renderHome();renderPlants();renderToys();renderClean();renderNotes();renderGuests();renderFin();if(!$('#settings').hidden)renderSettings();if(!$('#bookPanel').hidden)renderForm()}
-var SECTIONS=['home','items','clean','guests','fin','notes','settings','account'];
+var SECTIONS=['home','items','clean','guests','fin','notes','settings'];
 function show(t){
-  if(t==='settings'&&!(MODE!=='cloud'||A.role==='admin'))t='home';
-  if(t==='account'&&MODE!=='cloud')t='home';
+  if(t==='settings'&&!isAdmin())t='home';
   SECTIONS.forEach(function(id){$('#'+id).hidden=id!==t});
   document.querySelectorAll('#tabs button').forEach(function(b){b.setAttribute('aria-selected',b.dataset.t===t)});
   if(t==='settings')renderSettings();
-  if(t==='account')renderAccount();
   window.scrollTo(0,0);
 }
 
@@ -1106,14 +1096,13 @@ function bao(msg){var t=$('#toast');t.textContent=msg;t.classList.add('show');cl
 
 /* ============ sự kiện ============ */
 document.addEventListener('click',function(e){
-  var t=e.target.closest('[data-t],[data-go],[data-act],[data-guest],[data-view],[data-pick],[data-goday],[data-calnav],[data-calmode],[data-bkedit],[data-bkdel],[data-newbk],[data-newpkg],[data-uact],[data-qd],[data-dstep],[data-pkg],[data-nights],[data-flex],[data-resettime],[data-reprice],[data-fm],[data-pay],[data-fpay],[data-fin],[data-finnav]');
+  var t=e.target.closest('[data-t],[data-go],[data-act],[data-guest],[data-view],[data-pick],[data-goday],[data-calnav],[data-calmode],[data-bkedit],[data-bkdel],[data-newbk],[data-newpkg],[data-qd],[data-dstep],[data-pkg],[data-nights],[data-flex],[data-resettime],[data-reprice],[data-fm],[data-pay],[data-fpay],[data-fin],[data-finnav]');
   if(!t)return;
   var d=t.dataset, id=d.id;
   if(d.t){show(d.t);return}
   if(d.go){show(d.go);if(d.goview)setView(d.goview);return}
   if(d.view){setView(d.view);return}
   if(d.guest){openGuest=d.guest;renderGuests();return}
-  if(d.uact){userAction(d);return}
   if(d.qd){setDate(d.qd);return}
   if(d.dstep){setDate(addDays(validDate(F.date)?F.date:today(),+d.dstep));return}
   if(d.pkg){F.pkg=d.pkg;F.nights=1;F.start='';F.cvao='';F.cra='';renderForm();return}
@@ -1184,7 +1173,6 @@ document.addEventListener('change',function(e){
   else if(t.dataset.lost){find(S.toys,t.dataset.lost).lost=t.checked}
   else if(t.dataset.task){find(S.clean.tasks,t.dataset.task).done=t.checked}
   else if(t.dataset.todo){var x=find(S.todos,t.dataset.todo);x.done=t.checked;x.doneAt=Date.now()}
-  else if(t.dataset.urole){changeRole(t.dataset.urole,t.value);return}
   else return;
   save();renderAll();
 });
@@ -1230,13 +1218,12 @@ function rawApi(url,body){
           function(){return probe(url).then(function(msg){throw netErr(msg)})});
 }
 function api(action,payload){
-  var body=Object.assign({action:action,token:A.token},payload||{});
+  var body=Object.assign({action:action,key:A.key},payload||{});
   return rawApi(A.url,body).then(function(res){
-    if(res&&res.ok===false&&res.code==='auth'){var e=new Error(res.error||'Phiên đăng nhập đã hết hạn');e.auth=true;throw e}
+    if(res&&res.ok===false&&res.code==='auth'){var e=new Error(res.error||'Mã đồng bộ không đúng');e.auth=true;throw e}
     return res;
   });
 }
-function apiUrl(){return CONFIG.API_URL||lsGet(URL_KEY)||''}
 function setMsg(el,text,ok){el.hidden=!text;el.textContent=text||'';el.classList.toggle('okbox',!!ok)}
 
 /* ============ gộp dữ liệu 3 bên (gốc, máy này, máy chủ) ============ */
@@ -1291,7 +1278,7 @@ function applyRemote(data,ver){
 }
 function handleErr(err){
   Sy.busy=false;
-  if(err&&err.auth){forceLogout('Phiên đăng nhập đã hết hạn hoặc tài khoản bị thay đổi. Vui lòng đăng nhập lại.');return}
+  if(err&&err.auth){forceLogout('Mã đồng bộ không còn đúng. Hãy nhập lại.');return}
   if(err&&err.net){setSync('off',err.message);return}
   setSync('err',(err&&err.message)||'');
 }
@@ -1354,89 +1341,47 @@ function syncNow(){return isDirty()&&Sy.base?push():pull()}
 document.addEventListener('visibilitychange',function(){if(MODE==='cloud'&&document.visibilityState==='visible')syncNow()});
 window.addEventListener('online',function(){if(MODE==='cloud')syncNow()});
 
-/* ============ đăng nhập, đăng xuất ============ */
-var setupMode=false;
+/* ============ kết nối đồng bộ (mã chung) ============ */
 function showAuth(msg){
   MODE='local';clearInterval(Sy.poll);clearTimeout(Sy.timer);
   document.body.classList.add('locked');$('#auth').hidden=false;$('#who').hidden=true;
-  var hasCfg=!!CONFIG.API_URL;
-  $('#urlRow').hidden=hasCfg;
-  if(!hasCfg)$('#auUrl').value=lsGet(URL_KEY)||'';
-  $('#auDemo').hidden=!!apiUrl();
   setMsg($('#auMsg'),msg||'');
-  setSetup(false);
-  if(apiUrl())checkStatus(apiUrl());
 }
-function setSetup(on){
-  setupMode=on;
-  $('#loginForm').hidden=on;$('#setupForm').hidden=!on;
-  $('#auToggle').textContent=on?'Đã có tài khoản? Đăng nhập':'Lần đầu cài đặt? Tạo Admin';
-  $('#authSub').textContent=on?'Thiết lập lần đầu cho máy chủ mới.':'Đăng nhập bằng tài khoản do quản trị viên cấp.';
-}
-function checkStatus(url){
-  rawApi(url,{action:'status'}).then(function(res){if(res&&res.ok&&res.hasUsers===false)setSetup(true)}).catch(function(){});
-}
-function serverUrl(){
-  var u=CONFIG.API_URL||$('#auUrl').value.trim();
-  if(!/^https:\/\/\S+$/.test(u))return '';
-  return u;
-}
-function finishLogin(url,res){
-  if(!CONFIG.API_URL)lsSet(URL_KEY,url);
-  lsSet(AUTH_KEY,JSON.stringify({token:res.token,user:res.user,role:res.role}));
-  lsDel(DEMO_KEY);
-  A={url:url,token:res.token,user:res.user,role:res.role};
-  $('#auPass').value='';$('#suPass').value='';$('#suCode').value='';
+function finishLogin(key){
+  lsSet(AUTH_KEY,JSON.stringify({key:key}));lsDel(DEMO_KEY);
+  A={url:CONFIG.API_URL,key:key};
+  $('#auKey').value='';
   startCloud();
 }
-$('#auToggle').addEventListener('click',function(){
-  if(!setupMode&&!serverUrl()){setMsg($('#auMsg'),'Hãy nhập địa chỉ máy chủ (bắt đầu bằng https://) trước.');return}
-  setSetup(!setupMode);
-});
 $('#auDemo').addEventListener('click',function(){lsSet(DEMO_KEY,'1');startLocal()});
 $('#loginForm').addEventListener('submit',function(e){
   e.preventDefault();
-  var url=serverUrl();
-  if(!url){setMsg($('#auMsg'),'Địa chỉ máy chủ chưa đúng. Phải bắt đầu bằng https:// và kết thúc bằng /exec.');return}
+  var key=$('#auKey').value.trim();
   $('#auBtn').disabled=true;setMsg($('#auMsg'),'');
-  rawApi(url,{action:'login',username:$('#auUser').value.trim(),password:$('#auPass').value})
-    .then(function(res){if(!res.ok)throw new Error(res.error||'Đăng nhập thất bại');finishLogin(url,res)})
+  rawApi(CONFIG.API_URL,{action:'status',key:key})
+    .then(function(res){if(!res.ok)throw new Error(res.error||'Mã đồng bộ không đúng');finishLogin(key)})
     .catch(function(err){setMsg($('#auMsg'),err.message)})
     .then(function(){$('#auBtn').disabled=false});
 });
-$('#setupForm').addEventListener('submit',function(e){
-  e.preventDefault();
-  var url=serverUrl();
-  if(!url){setMsg($('#suMsg'),'Địa chỉ máy chủ chưa đúng.');return}
-  $('#suBtn').disabled=true;setMsg($('#suMsg'),'');
-  rawApi(url,{action:'bootstrap',setupCode:$('#suCode').value,username:$('#suUser').value.trim(),password:$('#suPass').value})
-    .then(function(res){if(!res.ok)throw new Error(res.error||'Không tạo được tài khoản');finishLogin(url,res)})
-    .catch(function(err){setMsg($('#suMsg'),err.message)})
-    .then(function(){$('#suBtn').disabled=false});
-});
 function enterApp(){
-  document.body.classList.remove('locked');$('#auth').hidden=true;
-  renderAll();show('home');
+  document.body.classList.remove('locked');$('#auth').hidden=true;$('#who').hidden=false;
+  applyAdmin();renderAll();show('home');
 }
-function setWeak(on){$('#weakWarn').hidden=!on}
 function startCloud(){
   MODE='cloud';
-  $('#who').hidden=false;
-  $('#whoBtn').textContent=A.user+' · '+(A.role==='admin'?'Admin':'Nhân viên');
-  $('#tabSettings').hidden=A.role!=='admin';
+  $('#syncChip').hidden=false;
   enterApp();
   setSync('saving');
   var fresh=!!S._seed&&!lsGet(BASE_KEY);
   if(fresh)document.body.classList.add('syncing');
-  api('me').then(function(r){setWeak(!!(r&&r.defaultPassword))}).catch(function(){});
   initialSync().then(function(){document.body.classList.remove('syncing');startTimers()});
 }
 function startLocal(){
   MODE='local';
-  $('#who').hidden=true;$('#tabSettings').hidden=false;
+  $('#syncChip').hidden=true;
   enterApp();
 }
-function forceLogout(msg){lsDel(AUTH_KEY);A={url:A.url,token:'',user:'',role:''};showAuth(msg)}
+function forceLogout(msg){lsDel(AUTH_KEY);A={url:A.url,key:''};showAuth(msg)}
 var logoutArmed=false;
 $('#logoutBtn').addEventListener('click',function(){
   var finish=function(){[KEY,BASE_KEY,AUTH_KEY].forEach(lsDel);location.reload()};
@@ -1453,24 +1398,6 @@ $('#logoutBtn').addEventListener('click',function(){
   finish();
 });
 
-/* ============ tài khoản của tôi ============ */
-function renderAccount(){
-  $('#meInfo').textContent='Đang đăng nhập: '+A.user+' ('+(A.role==='admin'?'Admin':'Nhân viên')+')';
-  setMsg($('#pwMsg'),'');
-}
-$('#pwForm').addEventListener('submit',function(e){
-  e.preventDefault();
-  api('changePassword',{oldPassword:$('#pwOld').value,newPassword:$('#pwNew').value}).then(function(res){
-    if(!res.ok)throw new Error(res.error||'Không đổi được mật khẩu');
-    A.token=res.token;lsSet(AUTH_KEY,JSON.stringify({token:A.token,user:A.user,role:A.role}));
-    $('#pwOld').value='';$('#pwNew').value='';
-    setWeak(false);
-    setMsg($('#pwMsg'),'Đã đổi mật khẩu.',true);
-  }).catch(function(err){setMsg($('#pwMsg'),err.message)});
-});
-
-/* ============ cài đặt (chỉ Admin) ============ */
-var uiUsers=[], uiPwFor=null, uiDel=null;
 function aiExport(){
   var anon=$('#aiAnon').checked,who={},nw=0;
   var nm=function(b){if(!anon)return b.name;var k=b.name.trim().toLowerCase();if(!who[k])who[k]='Khách '+(++nw);return who[k]};
@@ -1499,55 +1426,76 @@ $('#aiDown').addEventListener('click',function(){
   showAi();var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([$('#aiText').value],{type:'text/plain;charset=utf-8'}));a.download='dearsunday-dat-phong.txt';document.body.appendChild(a);a.click();a.remove();
 });
 function renderSettings(){
-  showAi();
-  var adm=MODE==='cloud'&&A.role==='admin';
-  $('#userPanel').hidden=!adm;$('#dataPanel').hidden=!(adm||MODE!=='cloud');
-  renderPriceTab();
-  if(!adm)return;
-  var m=Sy.meta;
-  $('#metaInfo').textContent='Phiên bản dữ liệu #'+Sy.ver+(m&&m.updatedAt?'. Cập nhật lần cuối bởi '+m.updatedBy+' lúc '+dt(m.updatedAt)+'.':'.');
-  api('listUsers').then(function(res){if(!res.ok)throw new Error(res.error);uiUsers=res.users;drawUsers()})
-    .catch(function(err){if(err.auth)return handleErr(err);setMsg($('#userMsg'),err.message)});
+  showAi();renderPriceTab();
+  var cl=MODE==='cloud';
+  $('#logoutBtn').hidden=!cl;$('#connectBtn').hidden=cl||!CONFIG.API_URL;
+  $('#syncInfo').textContent=cl?'Máy này đang đồng bộ tự động với máy chủ. Ngắt kết nối sẽ xóa dữ liệu lưu trên máy này (dữ liệu trên máy chủ vẫn còn).':'Dữ liệu chỉ lưu trên máy này.'+(CONFIG.API_URL?' Bấm "Kết nối đồng bộ" để dùng chung dữ liệu giữa các máy.':'');
 }
-function drawUsers(){
-  $('#userList').innerHTML=uiUsers.map(function(u){
-    var me=u.username===A.user;
-    return '<div class="li"><div class="name"><b>'+esc(u.username)+'</b>'+(me?' <span class="muted">(bạn)</span>':'')+' '+(u.role==='admin'?'<span class="pill k">Admin</span>':'<span class="pill mute">Nhân viên</span>')+(u.active?'':' <span class="pill bad">Đã khóa</span>')+'</div>'+
-      '<select data-urole="'+esc(u.username)+'" aria-label="Vai trò của '+esc(u.username)+'"><option value="staff"'+(u.role==='staff'?' selected':'')+'>Nhân viên</option><option value="admin"'+(u.role==='admin'?' selected':'')+'>Admin</option></select>'+
-      '<button class="btn ghost" data-uact="pw" data-u="'+esc(u.username)+'">Đặt lại mật khẩu</button>'+
-      '<button class="btn ghost" data-uact="active" data-u="'+esc(u.username)+'"'+(me?' disabled':'')+'>'+(u.active?'Khóa':'Mở khóa')+'</button>'+
-      '<button class="btn ghost'+(uiDel===u.username?' danger':'')+'" data-uact="del" data-u="'+esc(u.username)+'"'+(me?' disabled':'')+'>'+(uiDel===u.username?'Bấm lại để xóa':'Xóa')+'</button></div>'+
-      (uiPwFor===u.username?'<div class="li"><input type="text" id="newPw" placeholder="Mật khẩu mới (tối thiểu 6 ký tự)" autocomplete="off" style="flex:1 1 200px"><button class="btn" data-uact="pwsave" data-u="'+esc(u.username)+'">Lưu mật khẩu</button><button class="btn ghost" data-uact="pwcancel">Hủy</button></div>':'');
-  }).join('')||'<div class="empty">Chưa có tài khoản.</div>';
+$('#connectBtn').addEventListener('click',function(){lsDel(DEMO_KEY);showAuth('')});
+
+/* ============ quyền Admin: mã PIN lưu trên từng máy ============ */
+var PIN_KEY='dearsunday-pin', ADM_KEY='dearsunday-adm', pinMode='enter';
+function isAdmin(){try{return sessionStorage.getItem(ADM_KEY)==='1'}catch(e){return false}}
+function getPin(){try{return JSON.parse(lsGet(PIN_KEY)||'null')}catch(e){return null}}
+function hashPin(salt,pin){
+  var txt=salt+':'+pin;
+  if(window.crypto&&crypto.subtle&&window.TextEncoder)
+    return crypto.subtle.digest('SHA-256',new TextEncoder().encode(txt)).then(function(b){return Array.prototype.map.call(new Uint8Array(b),function(x){return ('0'+x.toString(16)).slice(-2)}).join('')});
+  var h=5381;for(var i=0;i<txt.length;i++)h=((h<<5)+h+txt.charCodeAt(i))|0;
+  return Promise.resolve('x'+h);
 }
-function adminCall(action,payload,okText){
-  setMsg($('#userMsg'),'');
-  return api(action,payload).then(function(res){
-    if(!res.ok)throw new Error(res.error||'Thao tác thất bại');
-    if(res.token){A.token=res.token;lsSet(AUTH_KEY,JSON.stringify({token:A.token,user:A.user,role:A.role}))}
-    uiUsers=res.users||uiUsers;uiPwFor=null;uiDel=null;drawUsers();
-    if(okText)setMsg($('#userMsg'),okText,true);
-  }).catch(function(err){if(err.auth)return handleErr(err);uiDel=null;drawUsers();setMsg($('#userMsg'),err.message)});
+function applyAdmin(){
+  $('#tabSettings').hidden=!isAdmin();
+  $('#adminBtn').textContent=isAdmin()?'Admin ✓':'Admin';
+  if(!isAdmin()&&!$('#settings').hidden)show('home');
 }
-function userAction(d){
-  var u=d.u;
-  if(d.uact==='pw'){uiPwFor=u;uiDel=null;drawUsers();var i=$('#newPw');if(i)i.focus()}
-  else if(d.uact==='pwcancel'){uiPwFor=null;drawUsers()}
-  else if(d.uact==='pwsave'){adminCall('setPassword',{username:u,password:$('#newPw').value},'Đã đặt lại mật khẩu cho '+u+'.')}
-  else if(d.uact==='active'){var cur=uiUsers.filter(function(x){return x.username===u})[0];adminCall('setActive',{username:u,active:!(cur&&cur.active)})}
-  else if(d.uact==='del'){
-    if(uiDel===u)adminCall('deleteUser',{username:u},'Đã xóa tài khoản '+u+'.');
-    else{uiDel=u;drawUsers();setTimeout(function(){if(uiDel===u){uiDel=null;drawUsers()}},4000)}
-  }
+function unlockAdmin(){try{sessionStorage.setItem(ADM_KEY,'1')}catch(e){}applyAdmin();closePin();show('settings')}
+function lockAdmin(){try{sessionStorage.removeItem(ADM_KEY)}catch(e){}applyAdmin()}
+function setPinMode(m){
+  pinMode=m;setMsg($('#pinMsg'),'');$('#pinIn').value='';$('#pinIn2').value='';
+  $('#pinRow2').hidden=m!=='new';$('#pinIn2').required=m==='new';
+  $('#pinTitle').textContent=m==='new'?'Tạo mã PIN Admin':m==='reset'?'Đặt lại mã PIN':'Mã PIN Admin';
+  $('#pinHelp').textContent=m==='new'?'Máy này chưa có mã PIN. Hãy đặt một mã từ 4 ký tự để mở mục Cài đặt.':m==='reset'?(MODE==='cloud'?'Nhập mã đồng bộ để đặt lại PIN.':'Máy này chỉ lưu dữ liệu riêng, bạn có thể đặt lại PIN ngay.'):'Nhập mã PIN để mở mục Cài đặt.';
+  $('#pinLbl').textContent=m==='reset'&&MODE==='cloud'?'Mã đồng bộ':'Mã PIN';
+  $('#pinIn').inputMode=m==='reset'?'text':'numeric';
+  $('#pinOk').textContent=m==='enter'?'Mở':m==='new'?'Lưu PIN':'Tiếp tục';
+  $('#pinForgot').hidden=m!=='enter';
 }
-function changeRole(u,role){adminCall('setRole',{username:u,role:role})}
-$('#userForm').addEventListener('submit',function(e){
+function openPin(){$('#pinSheet').hidden=false;setPinMode(getPin()?'enter':'new');$('#pinIn').focus()}
+function closePin(){$('#pinSheet').hidden=true}
+$('#adminBtn').addEventListener('click',function(){if(isAdmin())show('settings');else openPin()});
+$('#pinCancel').addEventListener('click',closePin);
+$('#pinForgot').addEventListener('click',function(){
+  if(MODE==='cloud')setPinMode('reset');
+  else if(confirm('Xóa mã PIN cũ và đặt PIN mới trên máy này?')){lsDel(PIN_KEY);setPinMode('new')}
+});
+$('#pinForm').addEventListener('submit',function(e){
   e.preventDefault();
-  adminCall('createUser',{username:$('#uName').value.trim(),password:$('#uPass').value,role:$('#uRole').value},'Đã cấp tài khoản. Hãy gửi tên đăng nhập và mật khẩu cho người dùng.').then(function(){
-    if(!$('#userMsg').classList.contains('okbox'))return;
-    $('#uName').value='';$('#uPass').value='';
+  var v=$('#pinIn').value;
+  if(pinMode==='enter'){
+    var rec=getPin();
+    hashPin(rec.salt,v).then(function(h){if(h===rec.hash)unlockAdmin();else{setMsg($('#pinMsg'),'Sai mã PIN.');$('#pinIn').value=''}});
+  }else if(pinMode==='reset'){
+    if(MODE==='cloud'&&v!==A.key){setMsg($('#pinMsg'),'Mã đồng bộ không đúng.');return}
+    lsDel(PIN_KEY);setPinMode('new');
+  }else{
+    if(v.length<4){setMsg($('#pinMsg'),'PIN cần ít nhất 4 ký tự.');return}
+    if(v!==$('#pinIn2').value){setMsg($('#pinMsg'),'Hai lần nhập PIN chưa giống nhau.');return}
+    var salt=uid();
+    hashPin(salt,v).then(function(h){lsSet(PIN_KEY,JSON.stringify({salt:salt,hash:h}));unlockAdmin()});
+  }
+});
+$('#pinChange').addEventListener('submit',function(e){
+  e.preventDefault();
+  var rec=getPin(),nw=$('#pcNew').value;
+  if(nw.length<4){setMsg($('#pcMsg'),'PIN mới cần ít nhất 4 ký tự.');return}
+  hashPin(rec.salt,$('#pcOld').value).then(function(h){
+    if(h!==rec.hash){setMsg($('#pcMsg'),'PIN hiện tại không đúng.');return}
+    var salt=uid();
+    hashPin(salt,nw).then(function(h2){lsSet(PIN_KEY,JSON.stringify({salt:salt,hash:h2}));$('#pcOld').value='';$('#pcNew').value='';setMsg($('#pcMsg'),'Đã đổi PIN.',true)});
   });
 });
+$('#admLock').addEventListener('click',lockAdmin);
 $('#importBtn').addEventListener('click',function(){$('#importFile').click()});
 $('#importFile').addEventListener('change',function(){
   var f=this.files[0];this.value='';if(!f)return;
@@ -1570,12 +1518,11 @@ $('#exportBtn').addEventListener('click',function(){
 
 /* ============ khởi động ============ */
 (function boot(){
-  /* không đăng nhập: dữ liệu nằm trong trình duyệt của máy này. Đặt CONFIG.API_URL để bật lại đăng nhập và đồng bộ. */
   var url=CONFIG.API_URL, saved=null;
   try{saved=JSON.parse(lsGet(AUTH_KEY)||'null')}catch(e){}
-  if(url&&saved&&saved.token){A={url:url,token:saved.token,user:saved.user,role:saved.role};startCloud();return}
-  if(url){showAuth();return}
-  startLocal();
+  if(url&&saved&&saved.key){A={url:url,key:saved.key};startCloud();return}
+  if(!url||lsGet(DEMO_KEY)==='1'){startLocal();return}
+  showAuth();
 })();
 </script>
 </body>
