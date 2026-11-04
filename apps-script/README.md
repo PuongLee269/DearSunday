@@ -61,3 +61,9 @@ Dùng [TTLock Open Platform](https://euopen.ttlock.com) (`api.sciener.com`).
 **Tự động:** chạy hàm `caiTuDongMaKhoa` một lần trong Apps Script editor. Mỗi giờ máy chủ tạo mã cho các đặt phòng sắp nhận trong 24 giờ tới mà chưa có mã.
 
 **Cần biết:** theo tài liệu TTLock, mã loại này phải được dùng ít nhất một lần trong 24 giờ kể từ giờ bắt đầu, nếu không sẽ bị vô hiệu. Thời hạn mã làm tròn theo giờ. Đổi giờ đặt phòng sau khi đã tạo mã thì mã cũ không tự đổi theo.
+
+## Lịch công khai chỉ xem (build 3.4)
+
+Trang `docs/lich.html` (https://puonglee269.github.io/DearSunday/lich.html) hiện lịch tháng ngày trống hoặc kín cho người ngoài xem, không cần đăng nhập. Trang chỉ gọi `<URL /exec>?cal=1` bằng GET, máy chủ chỉ trả về danh sách ngày: `night` (đêm đã kín, gồm cả ngày đặt từ Airbnb, Booking) và `day` (ngày chỉ bận theo giờ). Không có tên, số điện thoại, giá, ghi chú hay nguồn đặt phòng, và không có thao tác ghi nào. Trang tự tải lại mỗi phút và khi mở lại tab, nên luôn theo dữ liệu đã đồng bộ trong app.
+
+Ai có link đều xem được ngày bận của phòng. Cần dán code Apps Script bản 3.4 và triển khai phiên bản mới để trang chạy.

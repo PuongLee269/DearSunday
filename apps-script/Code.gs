@@ -18,7 +18,7 @@ var SETUP_CODE = "DOI-MA-NAY";
 // Chỉ lưu muối và mã băm, không lưu mật khẩu. Để trống nếu muốn tạo Admin bằng SETUP_CODE trên trang web.
 var SEED_USERS = [];
 
-var BUILD = "3.3";
+var BUILD = "3.4";
 var TOKEN_DAYS = 14;
 var HASH_ROUNDS = 150;
 var MAX_FAILS = 5;
@@ -28,6 +28,7 @@ var CHUNK = 3000;
 
 function doGet(e) {
   if (e && e.parameter && e.parameter.ics !== undefined) return ics_(String(e.parameter.ics));
+  if (e && e.parameter && e.parameter.cal !== undefined) return cal_();
   try {
     return out_({ ok: true, service: "DearSunday", build: BUILD, hasUsers: readUsers_().length > 0 });
   } catch (err) {
@@ -889,4 +890,49 @@ function caiTuDongMaKhoa() {
   });
   ScriptApp.newTrigger("tuTaoMaKhoa").timeBased().everyHours(1).create();
   Logger.log("Đã bật tự tạo mã vào cửa mỗi giờ.");
+}
+
+/* ---------- lịch công khai chỉ-đọc (trang docs/lich.html) ---------- */
+// Không cần đăng nhập, chỉ trả về ngày bận. Không có tên, số điện thoại, giá, ghi chú hay nguồn đặt phòng.
+// night: các đêm đã kín (ngày nhận đến trước ngày trả). day: ngày chỉ có đặt theo giờ (đêm vẫn trống).
+var CAL_NIGHT_PKGS = { sunday: 1, night: 1 };
+
+function calDays_(s, e) {
+  var out = [];
+  var d = s;
+  var guard = 0;
+  while (d < e && guard++ < 400) {
+    out.push(d);
+    d = icsAddDay_(d);
+  }
+  return out;
+}
+
+function cal_() {
+  var from = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  var to = new Date(Date.now() + 400 * 86400000).toISOString().slice(0, 10);
+  var night = {}, day = {};
+  var raw = readData_();
+  var bookings = [];
+  if (raw) {
+    try {
+      bookings = JSON.parse(raw).bookings || [];
+    } catch (err) {}
+  }
+  bookings.forEach(function (b) {
+    if (!b || !b.startAt || !b.endAt) return;
+    var s = String(b.startAt).slice(0, 10);
+    var e = String(b.endAt).slice(0, 10);
+    if (CAL_NIGHT_PKGS[b.pkg] && e > s) calDays_(s, e).forEach(function (d) { night[d] = 1; });
+    else day[s] = 1;
+  });
+  extState_().events.forEach(function (x) {
+    calDays_(x.s, x.e).forEach(function (d) { night[d] = 1; });
+  });
+  var keep = function (o) {
+    return Object.keys(o).filter(function (d) { return d >= from && d <= to; }).sort();
+  };
+  var n = keep(night);
+  var dd = keep(day).filter(function (d) { return !night[d]; });
+  return out_({ ok: true, service: "DearSunday", updated: new Date().toISOString(), night: n, day: dd });
 }
