@@ -510,6 +510,7 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
             </div>
             <div class="muted" id="bkPayHint"></div>
           </div>
+          <label class="chk big" id="bkCodeRow" hidden><input type="checkbox" id="bkCode"> Tạo mã vào cửa (TTLock) ngay sau khi lưu</label>
         </div>
       </section>
     </form>
@@ -945,7 +946,8 @@ function renderPrice(){
   var g=F.pkg&&GOI_BY[F.pkg];
   $('#bkPriceHint').innerHTML=!g?'Chọn gói để tự tính giá.':(c>0?'Giá gói '+money(GP(F.pkg).gia)+(g.kieu==='dem'&&F.nights>1?' × '+F.nights+' đêm':'')+(F.le?' + '+F.le+'% lễ':'')+' = '+money(c)+(F.touched?' <button type="button" class="linkbtn" data-reprice="1">Tính lại</button>':''):'Gói này chưa có giá. Nhập giá ở Cài đặt hoặc gõ trực tiếp ở đây.');
 }
-function renderForm(){renderDateStep();renderPkgs();renderTimeStep();renderPrice();renderSummary()}
+function renderCodeRow(){var b=editId&&find(S.bookings,editId);$('#bkCodeRow').hidden=!(TT&&MODE==='cloud')||!!(b&&b.code)}
+function renderForm(){renderCodeRow();renderDateStep();renderPkgs();renderTimeStep();renderPrice();renderSummary()}
 $('#bkLe').addEventListener('change',function(){F.le=+$('#bkLe').value;renderPrice()});
 $('#bkPrice').addEventListener('input',function(){F.touched=$('#bkPrice').value!=='';renderPrice()});
 function payHint(){var pr=+$('#bkPrice').value||0;return F.pay==='deposit'?'Sẽ ghi thu tạm ứng '+money(Math.round(pr/2)):F.pay==='full'?'Sẽ ghi thu '+money(pr):''}
@@ -961,6 +963,7 @@ function openForm(b,day,pkg){
     F={date:day||today(),pkg:pkg||null,nights:1,start:'',cvao:'',cra:'',le:0,touched:false,pay:'none'};
     $('#bkName').value='';$('#bkPhone').value='';$('#bkNote').value='';$('#bkPrice').value='';
   }
+  $('#bkCode').checked=!b;
   $('#bookPanel').hidden=false;document.body.classList.add('noscroll');$('#bookPanel').scrollTop=0;
   renderForm();
 }
@@ -989,7 +992,9 @@ $('#bkForm').addEventListener('submit',function(e){
   else{bk=Object.assign({id:uid(),paidAmt:0},rec);S.bookings.push(bk)}
   if(bk)applyPay(bk,F.pay);
   calCur=F.date;selDay=F.date;
+  var wantCode=TT&&MODE==='cloud'&&!$('#bkCodeRow').hidden&&$('#bkCode').checked&&bk&&!bk.code;
   closeForm();save();renderAll();bao('Đã lưu đặt phòng');
+  if(wantCode)makeCode(bk.id,null);
   $('#calPanel').scrollIntoView({behavior:'smooth',block:'start'});
 });
 
@@ -1067,11 +1072,11 @@ function codeBtns(b){
 }
 function makeCode(id,btn){
   if(MODE!=='cloud'){bao('Cần đăng nhập và đồng bộ để tạo mã');return}
-  btn.disabled=true;btn.textContent='Đang tạo mã...';
+  if(btn){btn.disabled=true;btn.textContent='Đang tạo mã...'}
   (isDirty()?push():Promise.resolve()).then(function(){return api('ttCode',{bookingId:id})}).then(function(r){
     if(!r.ok)throw new Error(r.error||'Không tạo được mã');
     bao('Đã tạo mã '+r.code);return pull();
-  }).catch(function(err){if(err.auth)return handleErr(err);bao(err.message);btn.disabled=false;btn.textContent='Tạo mã vào cửa'});
+  }).catch(function(err){if(err.auth)return handleErr(err);bao(err.message);if(btn){btn.disabled=false;btn.textContent='Tạo mã vào cửa'}});
 }
 function copyCodeMsg(id){
   var b=find(S.bookings,id);if(!b||!b.code)return;
