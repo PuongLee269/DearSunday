@@ -52,3 +52,5 @@ npm run dev              # http://localhost:3000
 ## Tích hợp API ổ khóa thông minh thật
 
 Chỉnh sửa `src/lib/smart-lock.ts` (hàm `callRealApi`) cho đúng schema request/response của nhà cung cấp khóa (TTLock, Sciener, Yale, Xiaomi...).
+
+Lịch phòng công khai chỉ xem: https://puonglee269.github.io/DearSunday/lich.html (xem `apps-script/README.md`).
