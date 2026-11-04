@@ -425,6 +425,12 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
         <label class="f">Địa chỉ lịch<input type="text" id="icsUrl" readonly></label>
         <div class="row"><button class="btn ghost" type="button" id="icsCopy">Sao chép</button><button class="btn ghost" type="button" id="icsRotate">Tạo lại mã lịch</button></div>
       </div>
+      <div style="border-top:3px dashed var(--brown);padding-top:12px" class="stack">
+        <h3 style="margin:0">Link xem lịch công khai (chỉ xem)</h3>
+        <p class="muted" style="margin:0">Trang chỉ hiện ngày trống hoặc kín, không có tên khách, số điện thoại hay giá, và không chỉnh sửa được. Tự cập nhật theo ứng dụng (mỗi phút). Ai có link đều xem được ngày bận của phòng.</p>
+        <label class="f">Link<input type="text" id="pubUrl" readonly></label>
+        <div class="row"><button class="btn ghost" type="button" id="pubCopy">Sao chép link</button><a class="btn ghost" id="pubOpen" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Mở xem thử</a></div>
+      </div>
     </div>
     <div class="panel stack" id="ttPanel">
       <h3 style="margin:0">Khóa thông minh TTLock</h3>
@@ -1633,6 +1639,7 @@ function drawExt(r){
   }).join('')+(r.auto?'':'<div class="warnbox">Chưa bật tự cập nhật mỗi 30 phút. Trong Apps Script chạy hàm caiTuDongLich một lần (xem hướng dẫn).</div>');
 }
 function renderIcal(){
+  $('#pubUrl').value=pubUrl();$('#pubOpen').href=pubUrl();
   api('extInfo').then(function(r){if(!r.ok)throw new Error(r.error);drawExt(r)}).catch(function(err){
     if(err.auth)return handleErr(err);
     setMsg($('#extMsg'),'Máy chủ chưa hỗ trợ lịch Airbnb và Booking. Hãy cập nhật code Apps Script (bản 3.2 trở lên).');
@@ -1658,6 +1665,8 @@ $('#extForm').addEventListener('submit',function(e){
 });
 $('#extSync').addEventListener('click',function(){extCall('syncExt',{},'Đã cập nhật lịch.')});
 $('#extStatus').addEventListener('click',function(e){var b=e.target.closest('[data-exclear]');if(b)extCall('setExt',{sources:[{id:b.dataset.exclear,url:''}]},'Đã gỡ nền tảng.')});
+function pubUrl(){return new URL('lich.html',location.href).href}
+$('#pubCopy').addEventListener('click',function(){var el=$('#pubUrl');el.value=pubUrl();el.select();try{navigator.clipboard.writeText(el.value).then(function(){bao('Đã sao chép link xem lịch')},function(){document.execCommand('copy');bao('Đã sao chép')})}catch(x){document.execCommand('copy');bao('Đã sao chép')}});
 $('#icsCopy').addEventListener('click',function(){var el=$('#icsUrl');el.select();try{navigator.clipboard.writeText(el.value).then(function(){bao('Đã sao chép địa chỉ lịch')},function(){document.execCommand('copy');bao('Đã sao chép')})}catch(x){document.execCommand('copy');bao('Đã sao chép')}});
 $('#icsRotate').addEventListener('click',function(){
   if(!icsArm){icsArm=true;$('#icsRotate').textContent='Bấm lại để tạo mã mới (địa chỉ cũ sẽ ngừng hoạt động)';setTimeout(function(){icsArm=false;$('#icsRotate').textContent='Tạo lại mã lịch'},5000);return}
