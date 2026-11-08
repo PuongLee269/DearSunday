@@ -675,7 +675,7 @@ function drop(list,id){return list.filter(function(x){return x.id!==id})}
 
 /* ============ lịch đặt phòng: logic ============
    Mỗi đặt phòng chiếm [bắt đầu, kết thúc + thời gian dọn của gói]. Hai đặt phòng trùng khi các khoảng này chồng nhau. */
-function extB(){return EXT.events.map(function(x){return{id:'ext:'+x.src+':'+x.s+':'+x.e,ext:true,name:'Khách đặt trên '+EXT_SRC[x.src].ten,phone:'',note:'',pkg:EXT_SRC[x.src].id,nights:Math.max(1,diffDays(x.s,x.e)),startAt:x.s+'T14:00',endAt:x.e+'T11:00'}})}
+function extB(){return EXT.events.map(function(x){return{id:'ext:'+x.src+':'+x.s+':'+x.e,ext:true,code:x.code,codeFrom:x.codeFrom,codeTo:x.codeTo,name:'Khách đặt trên '+EXT_SRC[x.src].ten,phone:'',note:'',pkg:EXT_SRC[x.src].id,nights:Math.max(1,diffDays(x.s,x.e)),startAt:x.s+'T14:00',endAt:x.e+'T11:00'}})}
 function allB(){return S.bookings.concat(extB())}
 function occOf(b){var g=GOI_BY[b.pkg]||GOI_BY.sunday;return{s:tmin(b.startAt),e:tmin(b.endAt),c:g.don}}
 function dungDo(a,b){return a.s<b.e+b.c&&b.s<a.e+a.c}
@@ -852,7 +852,7 @@ function renderCal(){
   renderDetail();
 }
 function bookingRow(b){
-  if(b.ext)return '<div class="res bk" style="border-left-color:'+GOI_BY[b.pkg].mau+'"><div class="bar"><div>'+chipGoi(b)+' <b>'+esc(b.name)+'</b></div></div><div>'+WD[dow(dateOf(b.startAt))]+' '+fdy(dateOf(b.startAt))+' đến '+fdy(dateOf(b.endAt))+'</div><div class="muted">Lịch lấy từ '+esc(GOI_BY[b.pkg].ten)+', sửa ở nền tảng đó.</div></div>';
+  if(b.ext)return '<div class="res bk" style="border-left-color:'+GOI_BY[b.pkg].mau+'"><div class="bar"><div>'+chipGoi(b)+' <b>'+esc(b.name)+'</b></div></div><div>'+WD[dow(dateOf(b.startAt))]+' '+fdy(dateOf(b.startAt))+' đến '+fdy(dateOf(b.endAt))+'</div><div class="muted">Lịch lấy từ '+esc(GOI_BY[b.pkg].ten)+', sửa ở nền tảng đó. Tính nhận 14:00, trả 11:00.</div>'+codeRow(b)+(codeBtns(b)?'<div class="bar" style="justify-content:flex-start">'+codeBtns(b)+'</div>':'')+'</div>';
   var g=GOI_BY[b.pkg],n=diffDays(dateOf(b.startAt),dateOf(b.endAt)),cl=xungDot(b,b.id).length,arm=armDel===b.id;
   return '<div class="res bk" style="border-left-color:'+g.mau+'"><div class="bar"><div>'+chipGoi(b)+' <b>'+esc(b.name)+'</b></div>'+(cl?'<span class="pill bad">Trùng lịch</span>':'')+'</div>'+
     '<div>'+WD[dow(dateOf(b.startAt))]+' '+fdy(dateOf(b.startAt))+' · '+khoang(b)+(g.kieu==='dem'?' · '+n+' đêm':'')+'</div>'+
@@ -1061,26 +1061,25 @@ function payRow(b){
   return '<div><b>'+money(b.price)+'</b> '+(st==='full'?'<span class="pill good">Đã thanh toán đủ</span>':st==='deposit'?'<span class="pill warn">Đã tạm ứng '+money(a)+'</span>':'<span class="pill bad">Chưa thu</span>')+'</div>';
 }
 function codeRow(b){
-  if(b.ext)return '';
   if(b.code)return '<div>Mã vào cửa: <b class="code">'+esc(b.code)+'</b> <span class="muted">đến '+esc(dt(b.codeTo))+'</span></div>';
   return '';
 }
 function codeBtns(b){
-  if(b.ext)return '';
   if(b.code)return '<button class="btn ghost" data-ttmsg="'+b.id+'">Sao chép tin nhắn mã</button>';
   return TT?'<button class="btn ghost" data-ttcode="'+b.id+'">Tạo mã vào cửa</button>':'';
 }
 function makeCode(id,btn){
   if(MODE!=='cloud'){bao('Cần đăng nhập và đồng bộ để tạo mã');return}
   if(btn){btn.disabled=true;btn.textContent='Đang tạo mã...'}
-  (isDirty()?push():Promise.resolve()).then(function(){return api('ttCode',{bookingId:id})}).then(function(r){
+  var ex=id.indexOf('ext:')===0?id.split(':'):null;
+  (ex?Promise.resolve():(isDirty()?push():Promise.resolve())).then(function(){return ex?api('ttCodeExt',{src:ex[1],s:ex[2],e:ex[3]}):api('ttCode',{bookingId:id})}).then(function(r){
     if(!r.ok)throw new Error(r.error||'Không tạo được mã');
-    bao('Đã tạo mã '+r.code);return pull();
+    bao('Đã tạo mã '+r.code);return ex?api('load',{extSince:0}).then(takeExt):pull();
   }).catch(function(err){if(err.auth)return handleErr(err);bao(err.message);if(btn){btn.disabled=false;btn.textContent='Tạo mã vào cửa'}});
 }
 function copyCodeMsg(id){
-  var b=find(S.bookings,id);if(!b||!b.code)return;
-  var txt='Xin chào '+b.name+', mã mở cửa của bạn là '+b.code+'. Mã có hiệu lực từ '+dt(b.codeFrom)+' đến '+dt(b.codeTo)+'.';
+  var b=id.indexOf('ext:')===0?extB().filter(function(x){return x.id===id})[0]:find(S.bookings,id);if(!b||!b.code)return;
+  var txt='Xin chào'+(b.ext?'':' '+b.name)+', mã mở cửa của bạn là '+b.code+'. Mã có hiệu lực từ '+dt(b.codeFrom)+' đến '+dt(b.codeTo)+'.';
   var done=function(){bao('Đã sao chép tin nhắn')};
   try{navigator.clipboard.writeText(txt).then(done,function(){bao(txt)})}catch(e){bao(txt)}
 }
