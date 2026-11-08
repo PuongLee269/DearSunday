@@ -67,3 +67,9 @@ Dùng [TTLock Open Platform](https://euopen.ttlock.com) (`api.sciener.com`).
 Trang `docs/lich.html` (https://puonglee269.github.io/DearSunday/lich.html) hiện lịch tháng ngày trống hoặc kín cho người ngoài xem, không cần đăng nhập. Trang chỉ gọi `<URL /exec>?cal=1` bằng GET, máy chủ chỉ trả về danh sách ngày: `night` (đêm đã kín, gồm cả ngày đặt từ Airbnb, Booking) và `day` (ngày chỉ bận theo giờ). Không có tên, số điện thoại, giá, ghi chú hay nguồn đặt phòng, và không có thao tác ghi nào. Trang tự tải lại mỗi phút và khi mở lại tab, nên luôn theo dữ liệu đã đồng bộ trong app.
 
 Ai có link đều xem được ngày bận của phòng. Cần dán code Apps Script bản 3.4 và triển khai phiên bản mới để trang chạy.
+
+## Mã vào cửa cho đặt phòng từ Airbnb, Booking (build 3.5)
+
+Thẻ các ngày đặt từ Airbnb, Booking trên Trang chủ có nút **Tạo mã vào cửa** (hiện khi đã kết nối khóa TTLock). Lịch iCal chỉ có ngày, nên mã hiệu lực từ 14:00 ngày nhận đến 11:00 ngày trả cộng 1 giờ (giờ Việt Nam). Mã lưu trong kho script (`EXT_CODES`, tự xóa sau khi hết hạn hơn 1 ngày), đồng bộ cho mọi máy, có nút sao chép tin nhắn để người quản lý tự gửi khách trên nền tảng. Bấm lại không tạo mã mới. Mã không có trong lịch iCal xuất và lịch công khai.
+
+Lưu ý: khách hủy đơn thì mã vẫn còn hiệu lực đến hết hạn (xóa mã từ xa cần gateway). Nên tạo mã gần ngày nhận phòng. Đổi ngày đặt phòng trên nền tảng thì mã cũ không tự đổi theo.

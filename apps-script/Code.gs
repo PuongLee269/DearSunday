@@ -18,7 +18,7 @@ var SETUP_CODE = "DOI-MA-NAY";
 // Chỉ lưu muối và mã băm, không lưu mật khẩu. Để trống nếu muốn tạo Admin bằng SETUP_CODE trên trang web.
 var SEED_USERS = [];
 
-var BUILD = "3.4";
+var BUILD = "3.5";
 var TOKEN_DAYS = 14;
 var HASH_ROUNDS = 150;
 var MAX_FAILS = 5;
@@ -76,7 +76,8 @@ var ACTIONS_ = {
   ttInfo: ttInfo_,
   ttSet: ttSet_,
   ttPick: ttPick_,
-  ttCode: ttCode_
+  ttCode: ttCode_,
+  ttCodeExt: ttCodeExt_
 };
 
 /* ---------- tiện ích ---------- */
@@ -631,11 +632,22 @@ function fetchExt_() {
   p.setProperty("EXT_AT", String(Date.now()));
 }
 
+function extCodes_() {
+  var raw = props_().getProperty("EXT_CODES");
+  return raw ? JSON.parse(raw) : {};
+}
+
 function extState_() {
   var events = [];
+  var codes = extCodes_();
   Object.keys(EXT_SOURCES).forEach(function (id) {
     var r = extRec_(id);
-    if (r && r.ev) r.ev.forEach(function (x) { events.push({ src: id, s: x[0], e: x[1] }); });
+    if (r && r.ev) r.ev.forEach(function (x) {
+      var ev = { src: id, s: x[0], e: x[1] };
+      var c = codes[id + "|" + x[0] + "|" + x[1]];
+      if (c) { ev.code = c.code; ev.codeFrom = c.from; ev.codeTo = c.to; }
+      events.push(ev);
+    });
   });
   return { at: Number(props_().getProperty("EXT_AT") || 0), events: events };
 }
@@ -935,4 +947,30 @@ function cal_() {
   var n = keep(night);
   var dd = keep(day).filter(function (d) { return !night[d]; });
   return out_({ ok: true, service: "DearSunday", updated: new Date().toISOString(), night: n, day: dd });
+}
+
+// Tạo mã vào cửa cho một đợt đặt từ Airbnb, Booking. Lịch iCal chỉ có ngày nên tính nhận 14:00, trả 11:00.
+var EXT_IN = "14:00";
+var EXT_OUT = "11:00";
+
+function ttCodeExt_(req) {
+  auth_(req);
+  if (!ttReady_()) fail_("bad", "Chưa kết nối khóa TTLock. Admin vào Cài đặt để kết nối.");
+  var src = String(req.src || ""), s = String(req.s || ""), e = String(req.e || "");
+  if (!EXT_SOURCES[src] || !/^\d{4}-\d{2}-\d{2}$/.test(s) || !/^\d{4}-\d{2}-\d{2}$/.test(e)) fail_("bad", "Thiếu thông tin đặt phòng");
+  var key = src + "|" + s + "|" + e;
+  return withLock_(function () {
+    var known = extState_().events.some(function (x) { return x.src === src && x.s === s && x.e === e; });
+    if (!known) fail_("bad", "Đợt đặt này không còn trong lịch " + EXT_SOURCES[src] + ". Hãy cập nhật lịch rồi thử lại.");
+    var codes = extCodes_();
+    if (codes[key]) return { ok: true, code: codes[key].code, from: codes[key].from, to: codes[key].to, existed: true };
+    var r = ttMakeCode_(s + "T" + EXT_IN, e + "T" + EXT_OUT, EXT_SOURCES[src] + " " + s);
+    codes[key] = { code: r.code, codeId: r.codeId, from: r.from, to: r.to };
+    // bỏ mã của các đợt đã kết thúc hơn 1 ngày để kho không đầy
+    var now = Date.now();
+    Object.keys(codes).forEach(function (k) { if (codes[k].to < now - 86400000) delete codes[k]; });
+    props_().setProperty("EXT_CODES", JSON.stringify(codes));
+    props_().setProperty("EXT_AT", String(Date.now()));
+    return { ok: true, code: r.code, from: r.from, to: r.to };
+  });
 }
