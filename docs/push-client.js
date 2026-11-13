@@ -43,7 +43,7 @@
       if(MODE!=='cloud')throw new Error('Hãy đăng nhập trước khi bật thông báo.');
       if(!self.Notification)throw new Error('Trình duyệt chưa hỗ trợ thông báo. Trên iPhone, hãy thêm app vào Màn hình chính.');
       // Request permission only in response to the user's button press.
-      var permission=await Notification.requestPermission();
+      var permission=await Promise.race([Notification.requestPermission(),new Promise(function(resolve,reject){setTimeout(function(){reject(new Error('Chưa nhận được phản hồi xin quyền. Hãy mở app bằng Chrome/Edge hoặc app đã thêm vào Màn hình chính, cho phép Thông báo rồi bấm bật lại.'));},20000);})]);
       if(permission!=='granted')throw new Error('Chưa được cấp quyền. Anh có thể bật quyền Thông báo trong cài đặt trình duyệt.');
       var fcm=await init(), t=await fcm.getToken(messaging,{vapidKey:DEARSUNDAY_PUSH.vapidKey,serviceWorkerRegistration:registration});
       checked(await api('pushRegister',{pushToken:t}));lsSet(TOKEN_KEY,t);lsSet(TOKEN_KEY+'-user',A.user);buttons();await refresh();
