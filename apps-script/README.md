@@ -68,6 +68,10 @@ Trang `docs/lich.html` (https://puonglee269.github.io/DearSunday/lich.html) hi�
 
 Ai có link đều xem được ngày bận của phòng. Cần dán code Apps Script bản 3.4 và triển khai phiên bản mới để trang chạy.
 
+## Thêm Agoda (build 3.6)
+
+Agoda là nguồn thứ ba, dùng chung cơ chế với Airbnb và Booking: dán địa chỉ iCal xuất của Agoda (Agoda Partner Portal → Connect calendars → Export) vào ô **Agoda** ở **Cài đặt → Lịch Airbnb, Booking và Agoda**. Địa chỉ chứa mã truy cập riêng nên chỉ lưu trên máy chủ, không đưa vào mã nguồn hay trang công khai. Muốn Agoda thấy lịch của Dear Sunday, dán địa chỉ ở mục "Lịch của Dear Sunday" vào ô **Import a calendar from another site** của Agoda. Thẻ Agoda cũng có nút tạo mã vào cửa như hai nền tảng kia.
+
 ## Mã vào cửa cho đặt phòng từ Airbnb, Booking (build 3.5)
 
 Thẻ các ngày đặt từ Airbnb, Booking trên Trang chủ có nút **Tạo mã vào cửa** (hiện khi đã kết nối khóa TTLock). Lịch iCal chỉ có ngày, nên mã hiệu lực từ 14:00 ngày nhận đến 11:00 ngày trả cộng 1 giờ (giờ Việt Nam). Mã lưu trong kho script (`EXT_CODES`, tự xóa sau khi hết hạn hơn 1 ngày), đồng bộ cho mọi máy, có nút sao chép tin nhắn để người quản lý tự gửi khách trên nền tảng. Bấm lại không tạo mã mới. Mã không có trong lịch iCal xuất và lịch công khai.

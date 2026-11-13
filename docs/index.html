@@ -410,17 +410,18 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
       </form>
     </div>
     <div class="panel stack" id="icalPanel">
-      <h3 style="margin:0">Lịch Airbnb và Booking</h3>
-      <p class="muted" style="margin:0">Dán địa chỉ lịch iCal (xuất) của Airbnb và Booking.com. Máy chủ đọc lại mỗi 30 phút, các ngày khách đã đặt trên nền tảng hiện trên lịch và báo trùng khi bạn đặt phòng. Địa chỉ được lưu trên máy chủ, không hiện lại ở đây.</p>
+      <h3 style="margin:0">Lịch Airbnb, Booking và Agoda</h3>
+      <p class="muted" style="margin:0">Dán địa chỉ lịch iCal (xuất) của Airbnb, Booking.com và Agoda. Máy chủ đọc lại mỗi 30 phút, các ngày khách đã đặt trên nền tảng hiện trên lịch và báo trùng khi bạn đặt phòng. Địa chỉ được lưu trên máy chủ, không hiện lại ở đây.</p>
       <form id="extForm" class="stack">
         <label class="f">Airbnb<input type="text" id="exAirbnb" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="https://www.airbnb.com.vn/calendar/ical/....ics?t=..."></label>
         <label class="f">Booking.com<input type="text" id="exBooking" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="https://admin.booking.com/hotel/hoteladmin/ical.html?t=..."></label>
+        <label class="f">Agoda<input type="text" id="exAgoda" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="https://portal.agoda.com/en-us/api/ari/icalendar?key=..."></label>
         <div id="extMsg" class="warnbox" hidden></div>
         <div class="row"><button class="btn">Lưu và cập nhật ngay</button><button class="btn ghost" type="button" id="extSync">Cập nhật ngay</button></div>
       </form>
       <div id="extStatus" class="list"></div>
       <div style="border-top:3px dashed var(--brown);padding-top:12px" class="stack">
-        <h3 style="margin:0">Lịch của Dear Sunday (gửi cho Airbnb, Booking)</h3>
+        <h3 style="margin:0">Lịch của Dear Sunday (gửi cho Airbnb, Booking, Agoda)</h3>
         <p class="muted" style="margin:0">Địa chỉ này chỉ chứa ngày bị chặn, không có thông tin khách. Ai có địa chỉ đều xem được ngày bận của phòng.</p>
         <label class="f">Địa chỉ lịch<input type="text" id="icsUrl" readonly></label>
         <div class="row"><button class="btn ghost" type="button" id="icsCopy">Sao chép</button><button class="btn ghost" type="button" id="icsRotate">Tạo lại mã lịch</button></div>
@@ -577,8 +578,8 @@ var GOI=[
   {id:'h4eve',ten:'4H buổi tối',kieu:'linhhoat',dai:240,tu:'15:30',den:'18:00',don:60,mau:'#7bbf74',hinh:'clock',moTa:'4 tiếng linh hoạt, xong sau 19:00',khung:'Bắt đầu 15:30 đến 18:00'}
 ];
 var GOI_BY={};GOI.forEach(function(g){GOI_BY[g.id]=g});
-/* lịch đặt từ Airbnb, Booking: coi như "gói" riêng chỉ để hiển thị, không đưa vào danh sách chọn gói */
-var EXT_SRC={airbnb:{id:'ext_airbnb',ten:'Airbnb',kieu:'dem',don:90,mau:'#ff8fa3',vao:'14:00',ra:'11:00'},booking:{id:'ext_booking',ten:'Booking.com',kieu:'dem',don:90,mau:'#8fb6ff',vao:'14:00',ra:'11:00'}};
+/* lịch đặt từ Airbnb, Booking, Agoda: coi như "gói" riêng chỉ để hiển thị, không đưa vào danh sách chọn gói */
+var EXT_SRC={airbnb:{id:'ext_airbnb',ten:'Airbnb',kieu:'dem',don:90,mau:'#ff8fa3',vao:'14:00',ra:'11:00'},booking:{id:'ext_booking',ten:'Booking.com',kieu:'dem',don:90,mau:'#8fb6ff',vao:'14:00',ra:'11:00'},agoda:{id:'ext_agoda',ten:'Agoda',kieu:'dem',don:90,mau:'#c3a6ff',vao:'14:00',ra:'11:00'}};
 Object.keys(EXT_SRC).forEach(function(k){GOI_BY[EXT_SRC[k].id]=EXT_SRC[k]});
 var EXT={at:0,events:[]}, TT=false;
 try{var _x=JSON.parse(lsGet(EXT_KEY)||'null');if(_x&&Array.isArray(_x.events))EXT=_x}catch(e){}
@@ -1646,14 +1647,14 @@ function renderIcal(){
   $('#pubUrl').value=pubUrl();$('#pubOpen').href=pubUrl();
   api('extInfo').then(function(r){if(!r.ok)throw new Error(r.error);drawExt(r)}).catch(function(err){
     if(err.auth)return handleErr(err);
-    setMsg($('#extMsg'),'Máy chủ chưa hỗ trợ lịch Airbnb và Booking. Hãy cập nhật code Apps Script (bản 3.2 trở lên).');
+    setMsg($('#extMsg'),'Máy chủ chưa hỗ trợ lịch Airbnb, Booking và Agoda. Hãy cập nhật code Apps Script (bản 3.2 trở lên).');
   });
 }
 function extCall(action,payload,okText){
   setMsg($('#extMsg'),'Đang đọc lịch...',true);
   return api(action,payload).then(function(r){
     if(!r.ok)throw new Error(r.error||'Không thực hiện được');
-    drawExt(r);$('#exAirbnb').value='';$('#exBooking').value='';
+    drawExt(r);$('#exAirbnb').value='';$('#exBooking').value='';$('#exAgoda').value='';
     var bad=r.sources.filter(function(x){return x.has&&!x.ok});
     setMsg($('#extMsg'),bad.length?'Có nền tảng chưa đọc được: '+bad.map(function(x){return x.name+' ('+x.err+')'}).join('; '):okText,!bad.length);
     return api('load',{extSince:0}).then(takeExt);
@@ -1664,6 +1665,7 @@ $('#extForm').addEventListener('submit',function(e){
   var src=[];
   if($('#exAirbnb').value.trim())src.push({id:'airbnb',url:$('#exAirbnb').value.trim()});
   if($('#exBooking').value.trim())src.push({id:'booking',url:$('#exBooking').value.trim()});
+  if($('#exAgoda').value.trim())src.push({id:'agoda',url:$('#exAgoda').value.trim()});
   if(!src.length){setMsg($('#extMsg'),'Hãy dán ít nhất một địa chỉ iCal.');return}
   extCall('setExt',{sources:src},'Đã lưu và cập nhật lịch.');
 });
@@ -1675,7 +1677,7 @@ $('#icsCopy').addEventListener('click',function(){var el=$('#icsUrl');el.select(
 $('#icsRotate').addEventListener('click',function(){
   if(!icsArm){icsArm=true;$('#icsRotate').textContent='Bấm lại để tạo mã mới (địa chỉ cũ sẽ ngừng hoạt động)';setTimeout(function(){icsArm=false;$('#icsRotate').textContent='Tạo lại mã lịch'},5000);return}
   icsArm=false;$('#icsRotate').textContent='Tạo lại mã lịch';
-  api('rotateIcs').then(function(r){if(!r.ok)throw new Error(r.error);$('#icsUrl').value=r.icsUrl;bao('Đã tạo mã mới. Hãy dán địa chỉ mới vào Airbnb và Booking.')}).catch(function(err){if(err.auth)return handleErr(err);setMsg($('#extMsg'),err.message)});
+  api('rotateIcs').then(function(r){if(!r.ok)throw new Error(r.error);$('#icsUrl').value=r.icsUrl;bao('Đã tạo mã mới. Hãy dán địa chỉ mới vào Airbnb, Booking và Agoda.')}).catch(function(err){if(err.auth)return handleErr(err);setMsg($('#extMsg'),err.message)});
 });
 function drawUsers(){
   $('#userList').innerHTML=uiUsers.map(function(u){
