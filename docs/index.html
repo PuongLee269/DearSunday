@@ -620,19 +620,19 @@ function seed(){var t=today(),n0=Date.now();return{
   clean:{last:n0-2*DAY,tasks:defaultClean()},
   notes:[],
   guests:[
-    {id:'g1',name:'Trần Minh Anh',phone:'0987654321',status:'VERIFIED',ver:[{risk:'LOW',sum:'Không phát hiện dấu hiệu bất thường rõ ràng từ hồ sơ và số điện thoại đã cung cấp. Vẫn nên đối chiếu thêm khi khách nhận phòng.',at:n0-DAY}],codes:[]}
+    {id:'g1',name:'Khách mẫu 1',phone:'',status:'VERIFIED',ver:[{risk:'LOW',sum:'Không phát hiện dấu hiệu bất thường rõ ràng từ hồ sơ và số điện thoại đã cung cấp. Vẫn nên đối chiếu thêm khi khách nhận phòng.',at:n0-DAY}],codes:[]}
   ],
   tx:[
-    {id:'t1',type:'INCOME',cat:'Tiền phòng',amt:1200000,desc:'Trần Minh Anh, 2 đêm',at:n0-3*DAY},
+    {id:'t1',type:'INCOME',cat:'Tiền phòng',amt:1200000,desc:'Khách mẫu 1, 2 đêm',at:n0-3*DAY},
     {id:'t2',type:'EXPENSE',cat:'Điện nước',amt:350000,desc:'',at:n0-2*DAY}
   ],
   todos:[
     {id:'d1',text:'Kiểm tra pin ổ khóa thông minh',due:addDays(t,1),done:false}
   ],
   bookings:[
-    {id:'b1',name:'Trần Minh Anh',phone:'0987654321',note:'',pkg:'sunday',nights:2,startAt:addDays(t,-1)+'T14:00',endAt:addDays(t,1)+'T11:00'},
-    {id:'b2',name:'Lê Hoàng',phone:'',note:'Đến muộn sau 21h',pkg:'day',nights:1,startAt:addDays(t,3)+'T12:30',endAt:addDays(t,3)+'T20:30'},
-    {id:'b3',name:'Phạm Văn Nam',phone:'',note:'',pkg:'night',nights:1,startAt:addDays(t,3)+'T22:00',endAt:addDays(t,4)+'T11:00'}
+    {id:'b1',name:'Khách mẫu 1',phone:'',note:'',pkg:'sunday',nights:2,startAt:addDays(t,-1)+'T14:00',endAt:addDays(t,1)+'T11:00'},
+    {id:'b2',name:'Khách mẫu 2',phone:'',note:'Đến muộn sau 21h',pkg:'day',nights:1,startAt:addDays(t,3)+'T12:30',endAt:addDays(t,3)+'T20:30'},
+    {id:'b3',name:'Khách mẫu 3',phone:'',note:'',pkg:'night',nights:1,startAt:addDays(t,3)+'T22:00',endAt:addDays(t,4)+'T11:00'}
   ]
 }}
 function blank(){return{plants:[],water:null,toys:[],clean:{last:null,tasks:defaultClean()},notes:[],guests:[],tx:[],todos:[],bookings:[]}}
@@ -1725,6 +1725,7 @@ $('#exportBtn').addEventListener('click',function(){
 </script>
 <script src="push-config.js"></script>
 <script src="push-client.js"></script>
+<script src="ota-finance.js?v=20261113-1"></script>
 <script>
 /* ============ khởi động ============ */
 (function boot(){
@@ -1737,4 +1738,5 @@ $('#exportBtn').addEventListener('click',function(){
 </script>
 </body>
 </html>
+
 

@@ -12,7 +12,7 @@
  */
 
 // Đổi chuỗi này trước khi triển khai. Chỉ dùng 1 lần, để tạo Admin đầu tiên (không cần nếu có SEED_USERS).
-var SETUP_CODE = "DOI-MA-NAY";
+var SETUP_CODE = "";
 
 // Tài khoản tạo sẵn, được thêm 1 lần khi chưa có ai. Mỗi mục: {username, salt, hash, role}.
 // Chỉ lưu muối và mã băm, không lưu mật khẩu. Để trống nếu muốn tạo Admin bằng SETUP_CODE trên trang web.
@@ -58,6 +58,10 @@ function doPost(e) {
 }
 
 var ACTIONS_ = {
+  otaInfo: otaInfo_,
+  otaSetConfig: otaSetConfig_,
+  otaAdd: otaAdd_,
+  otaReceive: otaReceive_,
   pushRegister: pushRegister_,
   pushUnregister: pushUnregister_,
   pushInfo: pushInfo_,
@@ -276,7 +280,7 @@ function throttle_(key) {
 
 function bootstrap_(req) {
   if (readUsers_().length) fail_("forbidden", "Đã có tài khoản, không thể khởi tạo lại");
-  if (SETUP_CODE === "DOI-MA-NAY") fail_("setup", "Hãy đổi SETUP_CODE trong script rồi triển khai lại");
+  if (!SETUP_CODE || SETUP_CODE === "DOI-MA-NAY") fail_("setup", "Hãy đặt SETUP_CODE riêng trong script rồi triển khai lại");
   var th = throttle_("fail:__setup");
   if (String(req.setupCode || "") !== SETUP_CODE) {
     th.fail();
@@ -385,6 +389,9 @@ function save_(req) {
       var cur = readData_();
       return { ok: false, conflict: true, version: m.version, updatedAt: m.updatedAt, updatedBy: m.updatedBy, data: cur ? JSON.parse(cur) : null };
     }
+    otaProtectSave_(req.data, JSON.parse(readData_() || '{}'));
+    str = JSON.stringify(req.data);
+    if (str.length > MAX_DATA_CHARS) fail_('big', 'Dữ liệu quá lớn');
     writeData_(str);
     var next = { version: m.version + 1, updatedAt: Date.now(), updatedBy: u.username };
     setMeta_(next);
@@ -637,6 +644,7 @@ function fetchExt_() {
     try { pushCalendarChange_(id, old, rec); } catch (e) { p.setProperty("PUSH_LAST_ERROR", "Không ghi được thông báo lịch."); }
   });
   p.setProperty("EXT_AT", String(Date.now()));
+  try { otaCapture_(); } catch (e) { console.error('Không lưu được mục đối soát nền tảng'); }
   try { pushFlush_(); } catch (e) { p.setProperty("PUSH_LAST_ERROR", "Không gửi được thông báo; kiểm tra quyền Apps Script."); }
 }
 
@@ -982,4 +990,5 @@ function ttCodeExt_(req) {
     return { ok: true, code: r.code, from: r.from, to: r.to };
   });
 }
+
 
