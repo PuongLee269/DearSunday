@@ -27,6 +27,8 @@ var MAX_DATA_CHARS = 90000;
 var CHUNK = 3000;
 
 function doGet(e) {
+  var icalPath = String((e && e.pathInfo) || "").match(/^calendar\/([a-f0-9]{40})\.ics$/);
+  if (icalPath) return ics_(icalPath[1]);
   if (e && e.parameter && e.parameter.ics !== undefined) return ics_(String(e.parameter.ics));
   if (e && e.parameter && e.parameter.cal !== undefined) return cal_();
   try {
@@ -56,6 +58,10 @@ function doPost(e) {
 }
 
 var ACTIONS_ = {
+  pushRegister: pushRegister_,
+  pushUnregister: pushUnregister_,
+  pushInfo: pushInfo_,
+  pushTest: pushTest_,
   status: status_,
   bootstrap: bootstrap_,
   login: login_,
@@ -628,8 +634,10 @@ function fetchExt_() {
     }
     if (!rec.ok && old && old.ev) rec.ev = old.ev; // lỗi tạm thời thì giữ lịch lần trước
     p.setProperty("EXT_" + id, JSON.stringify(rec));
+    try { pushCalendarChange_(id, old, rec); } catch (e) { p.setProperty("PUSH_LAST_ERROR", "Không ghi được thông báo lịch."); }
   });
   p.setProperty("EXT_AT", String(Date.now()));
+  try { pushFlush_(); } catch (e) { p.setProperty("PUSH_LAST_ERROR", "Không gửi được thông báo; kiểm tra quyền Apps Script."); }
 }
 
 function extCodes_() {
@@ -974,3 +982,4 @@ function ttCodeExt_(req) {
     return { ok: true, code: r.code, from: r.from, to: r.to };
   });
 }
+
