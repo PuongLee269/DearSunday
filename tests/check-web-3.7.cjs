@@ -69,7 +69,7 @@ const addD = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return i
 const HR = 3600000;
 const win = (s, e) => { const a = new Date(s + ':00+07:00').getTime(), b = new Date(e + ':00+07:00').getTime(); return { from: Math.floor(a / HR) * HR, to: Math.ceil((b + HR) / HR) * HR }; };
 
-function makeData() {
+function makeData(extra) {
   const s1 = addD(5) + 'T14:00', e1 = addD(6) + 'T11:00', w1 = win(s1, e1);
   return {
     plants: [{ id: 'p1', name: 'Trầu bà', days: 2 }], water: Date.now() - 72 * HR,
@@ -84,6 +84,7 @@ function makeData() {
     tx: [{ id: 't1', type: 'INCOME', cat: 'Tiền phòng', amt: 1000000, desc: 'Thanh toán đủ · Khách A', at: Date.now() - HR, bk: 'bk1' }],
     bookings: [
       { id: 'bk1', name: 'Khách A', phone: '0900000001', note: '', pkg: 'sunday', nights: 1, startAt: s1, endAt: e1, le: 0, price: 1000000, paidAmt: 1000000, code: '123456', codeId: 1, codeFrom: w1.from, codeTo: w1.to },
+      ...Array.from({ length: extra || 0 }, (_, i) => ({ id: 'bkm' + i, name: 'Khách mẫu số ' + (i + 1) + ' tên khá dài để thử cắt chữ', phone: '09000001' + pad2(i), note: i % 3 ? '' : 'Ghi chú thử', pkg: i % 2 ? 'night' : 'sunday', nights: 1, startAt: addD(30 + i * 2) + (i % 2 ? 'T22:00' : 'T14:00'), endAt: addD(31 + i * 2) + 'T11:00', le: 0, price: 800000, paidAmt: i % 3 === 0 ? 800000 : i % 3 === 1 ? 400000 : 0 })),
       { id: 'bk2', name: 'Khách X', phone: '', note: '', pkg: 'night', nights: 1, startAt: addD(-20) + 'T22:00', endAt: addD(-19) + 'T11:00', le: 0, price: 600000, paidAmt: 600000 }
     ]
   };
@@ -91,7 +92,7 @@ function makeData() {
 
 function fakeServer(mode, opt) {
   opt = opt || {};
-  const st = { mode, data: opt.data || makeData(), version: 7, log: [], tt: opt.tt !== false, failSave: false, authFail: false, codeN: 100 };
+  const st = { mode, data: opt.data || makeData(opt.extra), version: 7, log: [], tt: opt.tt !== false, failSave: false, authFail: false, codeN: 100 };
   const unknown = { ok: false, error: 'unknown action', code: 'bad' };
   const MISSING = ['otaInfo', 'otaSetConfig', 'otaAdd', 'otaReceive', 'otaCancel', 'pushRegister', 'pushUnregister', 'pushInfo', 'pushTest'];
   st.handle = (body) => {
@@ -101,8 +102,8 @@ function fakeServer(mode, opt) {
     if (st.mode === 'cu' && MISSING.includes(a) && !(opt.otaInfoOld && (a === 'otaInfo'))) return unknown;
     switch (a) {
       case 'status': return { ok: true, hasUsers: true };
-      case 'me': return { ok: true, user: 'admin', role: 'admin' };
-      case 'login': return { ok: true, token: 'tok', user: 'admin', role: 'admin' };
+      case 'me': return { ok: true, user: opt.role === 'staff' ? 'nv' : 'admin', role: opt.role || 'admin' };
+      case 'login': return { ok: true, token: 'tok', user: opt.role === 'staff' ? 'nv' : 'admin', role: opt.role || 'admin' };
       case 'load': {
         const ev = [{ src: 'airbnb', s: addD(10), e: addD(12) }, { src: 'booking', s: addD(14), e: addD(15) }];
         if (st.mode === 'moi' || opt.extraSrc) { ev.push({ src: 'agoda', s: addD(20), e: addD(22) }); ev.push({ src: 'vrbo', s: addD(25), e: addD(26) }); }
@@ -129,7 +130,7 @@ function fakeServer(mode, opt) {
       case 'otaInfo': return { ok: true, config: {}, rows: [{ id: 'ota:booking:2026-12-11:2026-12-13', source: 'booking', start: '2026-12-11', end: '2026-12-13', origin: 'ical', inCalendar: true, quote: { nights: 2, nightly: 850000, pkg: 'sunday', gross: 1700000, percent: 20, fee: 340000, net: 1360000 }, receipt: { amount: 1350000, receivedOn: '2026-11-13' } }] };
       case 'otaCancel': return { ok: true };
       case 'pushRegister': case 'pushUnregister': return { ok: true };
-      case 'pushInfo': return { ok: true, items: [] };
+      case 'pushInfo': return { ok: true, items: Array.from({ length: opt.pushItems || 0 }, (_, i) => ({ title: 'Airbnb: lịch có thay đổi', body: 'Có ngày bận mới trong lịch Airbnb (#' + (i + 1) + ')', at: Date.now() - i * 3600000 })) };
       case 'changePassword': return { ok: true, token: 'tok2' };
     }
     return { ok: false, error: 'Không rõ yêu cầu', code: 'bad' };
@@ -171,25 +172,38 @@ async function newPage(browser, base, st, o) {
   await page.waitForFunction(() => document.querySelector('#syncChip') && /Đã đồng bộ/.test(document.querySelector('#syncChip').textContent), null, { timeout: 15000 });
   return { ctx, page, errors };
 }
+/* chuyển tab bằng đúng cách người dùng bấm: hàng tab trên (máy tính) hoặc thanh tab đáy / menu "Thêm" (điện thoại) */
+async function goTab(page, t) {
+  if (await page.isVisible('#tabs')) { await page.click('#tabs button[data-t="' + t + '"]'); return; }
+  if (['home', 'clean', 'guests', 'fin'].includes(t)) { await page.click('#botnav button[data-t="' + t + '"]'); return; }
+  await page.click('#moreBtn'); await page.click('#moreMenu button[data-t="' + t + '"]');
+}
+async function openAcct(page) { if (!(await page.isVisible('#acctMenu'))) await page.click('#whoBtn'); }
+async function logout(page) { await openAcct(page); await page.click('#logoutBtn'); }
+/* mở rộng thẻ đặt phòng trong danh sách sắp tới */
+async function openCard(page, id) {
+  const head = '#upList .bkc[data-id="' + id + '"] .bkc-head';
+  if ((await page.getAttribute(head, 'aria-expanded')) !== 'true') await page.click(head);
+}
 const overflow = page => page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
 const TABS = ['home', 'items', 'clean', 'guests', 'fin', 'notes', 'settings', 'account'];
 
 /* ---------- 3. các nhóm kiểm ---------- */
 async function groupLayout(browser, base, mode) {
-  for (const w of [320, 390]) {
+  for (const w of [320, 390, 1280]) {
     console.log('# [' + mode + '] bố cục ' + w + 'px, không lỗi JS');
     const st = fakeServer(mode, { extraSrc: true });
     const { ctx, page, errors } = await newPage(browser, base, st, { w });
     for (const t of TABS) {
-      if (t === 'account') await page.evaluate(() => show('account')); else await page.click('#tabs button[data-t="' + t + '"]');
+      if (t === 'account') { await openAcct(page); await page.click('#acctMenu [data-t="account"]'); } else await goTab(page, t);
       await page.waitForTimeout(150);
       const ov = await overflow(page);
       ok(ov <= 0, `tab ${t} không tràn ngang (${w}px, dư ${ov})`);
     }
-    await page.click('#tabs button[data-t="guests"]');
+    await goTab(page, 'guests');
     await page.click('[data-guest="gA"]'); await page.waitForTimeout(100);
     ok(await overflow(page) <= 0, 'chi tiết khách không tràn ngang');
-    await page.click('#tabs button[data-t="home"]');
+    await goTab(page, 'home');
     await page.click('[data-newbk]'); await page.waitForTimeout(150);
     ok(await overflow(page) <= 0, 'khung đặt phòng không tràn ngang');
     await page.click('#bkCancel');
@@ -253,24 +267,24 @@ async function groupFinanceAndCode(browser, base, mode) {
   const st = fakeServer(mode);
   const { ctx, page, errors } = await newPage(browser, base, st);
   const before = await page.evaluate(() => ({ tx: S.tx.length, paid: S.bookings[0].paidAmt }));
-  await page.click('[data-bkedit="bk1"]');
+  await openCard(page, 'bk1'); await page.click('#upList [data-bkedit="bk1"]');
   await page.fill('#bkPrice', '1200000');
   ok(/thiếu|Sửa giá không tự/.test(await page.textContent('#bkPayHint')), 'form báo sửa giá không tự ghi tiền');
   await page.click('#bkSave'); await page.waitForTimeout(300);
   const after = await page.evaluate(() => ({ tx: S.tx.length, paid: S.bookings[0].paidAmt, price: S.bookings[0].price }));
   ok(after.tx === before.tx && after.paid === before.paid && after.price === 1200000, 'sửa giá đặt phòng đã thu: không sinh giao dịch (tx ' + before.tx + '→' + after.tx + ')');
   ok(/Đã thu 1\.000\.000đ \/ giá 1\.200\.000đ — còn thiếu 200\.000đ/.test(await page.textContent('#upList')), 'thẻ đặt phòng nhắc "còn thiếu"');
-  await page.click('[data-bkedit="bk1"]'); await page.fill('#bkPrice', '900000'); await page.click('#bkSave'); await page.waitForTimeout(300);
+  await page.click('#upList [data-bkedit="bk1"]'); await page.fill('#bkPrice', '900000'); await page.click('#bkSave'); await page.waitForTimeout(300);
   ok(/dư 100\.000đ/.test(await page.textContent('#upList')) && await page.evaluate(() => S.tx.length) === before.tx, 'giá giảm: nhắc "dư", vẫn không tự hoàn tiền');
   ok(await page.locator('#upList [data-pay]').count() === 1, 'có nút Hoàn tiền dư để người dùng tự bấm');
   /* người dùng chủ động bấm "Thu nốt" thì mới có giao dịch */
-  await page.click('[data-bkedit="bk1"]'); await page.fill('#bkPrice', '1200000'); await page.click('#bkSave'); await page.waitForTimeout(300);
-  await page.click('#upList [data-pay]'); await page.waitForTimeout(200);
+  await page.click('#upList [data-bkedit="bk1"]'); await page.fill('#bkPrice', '1200000'); await page.click('#bkSave'); await page.waitForTimeout(300);
+  await openCard(page, 'bk1'); await page.click('#upList [data-pay]'); await page.waitForTimeout(200);
   ok(await page.evaluate(() => S.tx.length) === before.tx + 1, 'bấm Thu nốt mới tạo giao dịch');
   /* đổi giờ đặt phòng đã có mã */
   await page.evaluate(() => { const b = S.bookings[0]; b.price = 1000000; b.paidAmt = 1000000; save(); renderAll(); });
   ok(!(await page.textContent('#upList')).includes('Mã lệch giờ'), 'mã đúng giờ: không có nhãn "Mã lệch giờ"');
-  await page.click('[data-bkedit="bk1"]');
+  await openCard(page, 'bk1'); await page.click('#upList [data-bkedit="bk1"]');
   await page.click('[data-nights="1"]');
   await page.click('#bkSave'); await page.waitForTimeout(400);
   const askVisible = await page.isVisible('#askBox');
@@ -312,11 +326,80 @@ async function groupForm(browser, base, mode) {
   await ctx.close();
 }
 
+async function groupGuestSync(browser, base, mode) {
+  console.log('# [' + mode + '] đặt phòng tự vào danh sách Khách hàng + nút thêm từ đặt phòng cũ');
+  const st = fakeServer(mode);
+  const { ctx, page, errors } = await newPage(browser, base, st, { w: 320 });
+  const add = async (day, name, phone) => {
+    await page.click('[data-newbk]'); await page.click('[data-pkg="night"]');
+    await page.fill('#bkDate', addD(day)); await page.fill('#bkName', name); await page.fill('#bkPhone', phone);
+    await page.waitForTimeout(100);
+    await page.evaluate(() => document.querySelector('#bkForm').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })));
+    await page.waitForTimeout(200);
+  };
+  const guests = () => page.evaluate(() => S.guests.map(g => ({ n: g.name, p: g.phone, k: Object.keys(g).sort().join(',') })));
+  const n0 = (await guests()).length;
+  await add(40, 'Lan Mới', '0911 222 333');
+  let g = await guests();
+  ok(g.length === n0 + 1 && g[0].n === 'Lan Mới' && g[0].p === '0911 222 333' && g[0].k === 'codes,id,name,phone,status,ver', 'đặt phòng có tên + SĐT: thêm khách mới đúng định dạng');
+  await add(45, 'Lan Khác Tên', '+84.911.222.333');
+  g = await guests();
+  ok(g.length === n0 + 1 && g[0].n === 'Lan Mới', 'cùng SĐT khác cách viết: không trùng khách, không ghi đè tên');
+  await add(50, 'TEST abc', '0999888777');
+  ok((await guests()).length === n0 + 1, 'tên bắt đầu "TEST": không thêm khách');
+  await add(55, '  Minh   Không SĐT ', '');
+  await add(60, 'minh không sđt', '');
+  g = await guests();
+  ok(g.length === n0 + 2 && g[0].n === 'Minh Không SĐT', 'không SĐT: khớp theo tên (không phân biệt hoa thường), chỉ thêm 1');
+  await add(65, 'Minh Không SĐT', '0933 444 555');
+  g = await guests();
+  ok(g.length === n0 + 2 && g[0].p === '0933 444 555', 'khách cũ chưa có SĐT: được bổ sung SĐT, không thêm khách');
+  /* đặt phòng cũ: chưa có khách "Khách X" (đơn không SĐT) */
+  await goTab(page, 'guests');
+  ok(await page.isVisible('#guestSync') && await overflow(page) <= 0, 'nút thêm từ đặt phòng cũ hiện, không tràn ngang 320');
+  const before = (await guests()).length;
+  await page.click('#guestSync'); await page.waitForTimeout(150);
+  const mid = (await guests()).length;
+  ok(mid === before + 1 && /Đã thêm 1 khách/.test(await page.textContent('#toast')), 'bấm nút lần 1: thêm đúng 1 khách (Khách X) và báo số khách' );
+  await page.click('#guestSync'); await page.waitForTimeout(150);
+  ok((await guests()).length === mid, 'bấm nút lần 2: không tạo trùng');
+  ok(errors.length === 0, 'không lỗi JS ' + errors.join('|'));
+  await ctx.close();
+}
+
+async function groupStaffPrices(browser, base, mode) {
+  console.log('# [' + mode + '] nhân viên sửa Giá các gói; chiết khấu nền tảng chỉ Admin');
+  let st = fakeServer(mode, { role: 'staff' });
+  let { ctx, page, errors } = await newPage(browser, base, st, { w: 320, ls: { 'dearsunday-auth': JSON.stringify({ token: 'tok', user: 'nv', role: 'staff' }) } });
+  ok(!(await page.isVisible('#tabSettings')) && !(await page.isVisible('#moreSettings')), 'nhân viên không thấy Cài đặt');
+  await goTab(page, 'fin');
+  ok(await page.isVisible('#pkgPanel > summary'), 'nhân viên thấy khối Giá các gói ở tab Tài chính');
+  await page.click('#pkgPanel > summary');
+  await page.fill('[data-pp="night"][data-pf="gia"]', '777000'); await page.dispatchEvent('[data-pp="night"][data-pf="gia"]', 'change'); await page.waitForTimeout(300);
+  ok(await page.evaluate(() => S.prices.night.gia) === 777000, 'nhân viên sửa giá: lưu vào dữ liệu');
+  await page.waitForTimeout(2500);
+  ok(st.log.some(b => b.action === 'save' && b.data.prices.night.gia === 777000), 'giá được đồng bộ lên máy chủ');
+  ok(await overflow(page) <= 0, 'Tài chính 320px (nhân viên): không tràn ngang');
+  ok(!(await page.isVisible('#otaSettings')) && !(await page.isVisible('#otaConfigForm')), 'nhân viên không thấy phần chiết khấu nền tảng');
+  ok(errors.length === 0, 'không lỗi JS ' + errors.join('|'));
+  await ctx.close();
+  st = fakeServer(mode);
+  ({ ctx, page, errors } = await newPage(browser, base, st, { w: 390 }));
+  await goTab(page, 'fin');
+  ok(await page.isVisible('#pkgPanel > summary'), 'Admin thấy Giá các gói ở Tài chính');
+  await goTab(page, 'settings');
+  ok(await page.isVisible('#icalPanel') && await page.isVisible('#userPanel') && await page.isVisible('#dataPanel'), 'Admin vẫn thấy đủ Kết nối, Người dùng, Dữ liệu');
+  if (mode === 'moi') ok(await page.isVisible('#otaSettings > summary'), 'Admin thấy chiết khấu nền tảng');
+  ok(await overflow(page) <= 0, 'Cài đặt 390px (Admin): không tràn ngang');
+  ok(errors.length === 0, 'không lỗi JS ' + errors.join('|'));
+  await ctx.close();
+}
+
 async function groupGuestCode(browser, base, mode) {
   console.log('# [' + mode + '] tab Khách hàng: mã khóa');
   let st = fakeServer(mode);
   let { ctx, page, errors } = await newPage(browser, base, st);
-  await page.click('#tabs button[data-t="guests"]');
+  await goTab(page, 'guests');
   await page.click('[data-guest="gB"]');
   const html = await page.content();
   ok(!/giả lập|id="cMail"|id="cFrom"|id="cLock"/.test(html), 'không còn ô/chữ giả lập (email, ID khóa, từ-đến)');
@@ -338,7 +421,7 @@ async function groupGuestCode(browser, base, mode) {
   /* chưa nối TTLock: ẩn */
   st = fakeServer(mode, { tt: false });
   ({ ctx, page, errors } = await newPage(browser, base, st));
-  await page.click('#tabs button[data-t="guests"]'); await page.click('[data-guest="gA"]');
+  await goTab(page, 'guests'); await page.click('[data-guest="gA"]');
   ok(await page.locator('[data-guestcode], #guestDetail h3:has-text("Mã vào cửa")').count() === 0, 'chưa nối TTLock: khối mã bị ẩn');
   await ctx.close();
 }
@@ -347,9 +430,9 @@ async function groupAgo(browser, base, mode) {
   console.log('# [' + mode + '] hàm ago');
   const st = fakeServer(mode);
   const { ctx, page, errors } = await newPage(browser, base, st);
-  await page.click('#tabs button[data-t="items"]');
+  await goTab(page, 'items');
   ok(/Lần tưới gần nhất: 3 ngày trước/.test(await page.textContent('#plantsView')), 'tưới cây 72 giờ: "3 ngày trước"');
-  await page.click('#tabs button[data-t="clean"]');
+  await goTab(page, 'clean');
   ok(/Dọn lần cuối: 1 ngày trước/.test(await page.textContent('#cleanView')), 'dọn phòng 30 giờ: "1 ngày trước"');
   const r = await page.evaluate(() => [ago(0), ago(Date.now() - 5 * 60000), ago(Date.now() - 3 * 3600000), ago(Date.now() - 30000)]);
   ok(r.join('|') === 'chưa lần nào|5 phút trước|3 giờ trước|vừa xong', 'ago: ' + r.join(' | '));
@@ -365,7 +448,7 @@ async function groupLogout(browser, base, mode) {
   let { ctx, page, errors } = await newPage(browser, base, st, { ls: { 'dearsunday-push-device': 'tok-old', 'dearsunday-push-device-user': 'admin', 'dearsunday-misc': '1' } });
   const keys0 = await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('dearsunday')));
   ok(keys0.includes('dearsunday-ext') && keys0.includes('dearsunday-v2'), 'trước khi thoát có các khóa dearsunday*: ' + keys0.join(','));
-  await page.click('#logoutBtn');
+  await logout(page);
   await page.waitForFunction(() => !document.querySelector('#auth').hidden, null, { timeout: 15000 });
   const keys1 = await page.evaluate(() => Object.keys(localStorage).filter(k => k.toLowerCase().startsWith('dearsunday')));
   ok(keys1.length === 0, 'đăng xuất xóa hết khóa dearsunday* (còn: ' + keys1.join(',') + ')');
@@ -379,11 +462,11 @@ async function groupLogout(browser, base, mode) {
   await page.evaluate(() => { S.notes.push({ id: 'nx', text: 'chưa lưu', at: Date.now() }); save(); });
   const dlgs = [];
   page.once('dialog', async d => { dlgs.push(d.message()); await d.dismiss(); });
-  await page.click('#logoutBtn'); await page.waitForTimeout(1500);
+  await logout(page); await page.waitForTimeout(1500);
   ok(dlgs[0] === 'Còn thay đổi chưa lưu lên máy chủ, đăng xuất sẽ mất. Vẫn đăng xuất?', 'hỏi xác nhận đúng câu');
   ok(await page.evaluate(() => !!localStorage.getItem('dearsunday-v2') && document.querySelector('#auth').hidden), 'chọn Không: vẫn đăng nhập, dữ liệu còn');
   page.once('dialog', d => d.accept());
-  await page.click('#logoutBtn');
+  await logout(page);
   await page.waitForFunction(() => !document.querySelector('#auth').hidden, null, { timeout: 15000 });
   ok(await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('dearsunday')).length) === 0, 'chọn Có: xóa sạch');
   await ctx.close();
@@ -392,7 +475,7 @@ async function groupLogout(browser, base, mode) {
   ({ ctx, page, errors } = await newPage(browser, base, st));
   await page.evaluate(() => { S.notes.push({ id: 'ny', text: 'sẽ lưu', at: Date.now() }); save(); });
   let asked = false; page.on('dialog', d => { asked = true; d.accept(); });
-  await page.click('#logoutBtn');
+  await logout(page);
   await page.waitForFunction(() => !document.querySelector('#auth').hidden, null, { timeout: 15000 });
   ok(!asked && st.data.notes.some(n => n.id === 'ny'), 'đồng bộ được: tự lưu lên máy chủ rồi thoát, không hỏi');
   await ctx.close();
@@ -411,7 +494,7 @@ async function groupOta(browser, base, mode) {
   console.log('# [' + mode + '] hủy xác nhận thu (OTA)');
   const st = fakeServer(mode, { otaInfoOld: true });
   const { ctx, page, errors } = await newPage(browser, base, st);
-  await page.click('#tabs button[data-t="fin"]');
+  await goTab(page, 'fin');
   await page.waitForSelector('[data-ota-cancel]', { timeout: 5000 });
   const dialogs = []; page.on('dialog', d => { dialogs.push(d.message()); d.accept(); });
   await page.click('[data-ota-cancel]'); await page.waitForTimeout(800);
@@ -421,6 +504,118 @@ async function groupOta(browser, base, mode) {
   if (mode === 'cu') ok(/Cần cập nhật máy chủ để dùng chức năng này/.test(await page.textContent('#otaStatus')), 'máy chủ cũ: báo "Cần cập nhật máy chủ..."');
   else ok(st.log.filter(b => b.action === 'otaInfo').length >= 2, 'máy chủ mới: tải lại sau khi hủy');
   ok(errors.length === 0, 'không lỗi JS' + errors.join('|'));
+  await ctx.close();
+}
+
+async function groupUi(browser, base) {
+  console.log('# [moi] giao diện gọn: chiều cao Trang chủ, thanh tab đáy, menu tài khoản, khối Cần chú ý, thông báo thu gọn');
+  const conflicts = [{ s: addD(10), e: addD(12), src: ['airbnb', 'app'] }];
+  const mk = () => fakeServer('moi', { extra: 8, pushItems: 30, conflicts, dupes: [{ s: addD(30), e: addD(32), src: ['app', 'booking'] }] });
+  let st = mk();
+  let { ctx, page, errors } = await newPage(browser, base, st, { w: 390 });
+  const h = await page.evaluate(() => document.documentElement.scrollHeight);
+  console.log('  Trang chủ 390px (mẫu ~10 đặt phòng + 30 thông báo), cao ' + h + 'px');
+  ok(h < 2600, 'Trang chủ chưa mở rộng cao < 2600px (thực tế ' + h + 'px)');
+  const n = await page.evaluate(() => allB().filter(b => occOf(b).e >= nowMin()).length);
+  ok(n >= 10, 'dữ liệu mẫu có từ 10 đặt phòng sắp tới (có ' + n + ')');
+  ok(await page.isVisible('#botnav') && !(await page.isVisible('#tabs')), '390px: thanh tab đáy hiện, hàng tab trên ẩn');
+  const labels = await page.$$eval('#botnav button', bs => bs.map(b => b.textContent.trim()));
+  ok(labels.length === 5 && labels[0] === 'Trang chủ' && labels[4] === 'Thêm', 'thanh tab đáy có 5 mục: ' + labels.join(', '));
+  await page.click('#moreBtn');
+  const more = await page.$$eval('#moreMenu button', bs => bs.filter(b => b.offsetParent).map(b => b.textContent.trim()));
+  ok(more.join('|') === 'Đồ đạc và cây|Ghi chú|Cài đặt', '"Thêm" mở các tab còn lại (Cài đặt cho Admin): ' + more.join(', '));
+  await page.click('#moreMenu button[data-t="notes"]');
+  ok(await page.isHidden('#moreMenu') && await page.isVisible('#notes'), 'chọn trong "Thêm": đóng menu và mở đúng tab');
+  await goTab(page, 'home');
+  /* thanh đáy không che nội dung */
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)); await page.waitForTimeout(100);
+  const gap = await page.evaluate(() => document.querySelector('#botnav').getBoundingClientRect().top - document.querySelector('#pushPanel').getBoundingClientRect().bottom);
+  ok(gap >= 0, 'cuối trang không bị thanh tab đáy che (cách ' + Math.round(gap) + 'px)');
+  /* đầu trang: logo + trạng thái + tài khoản */
+  const hh = await page.evaluate(() => document.querySelector('header').getBoundingClientRect().height);
+  ok(hh < 80, 'đầu trang gọn, 1 hàng (cao ' + Math.round(hh) + 'px)');
+  ok(!(await page.isVisible('#acctMenu')), 'menu tài khoản đóng sẵn');
+  await page.click('#whoBtn');
+  ok(await page.isVisible('#acctMenu') && /admin/.test(await page.textContent('#acctMenu')) && /Admin/.test(await page.textContent('#acctMenu')), 'menu tài khoản hiện tên và vai trò');
+  ok(await page.isVisible('#logoutBtn') && /Đăng xuất/.test(await page.textContent('#logoutBtn')) && /Đổi mật khẩu/.test(await page.textContent('#acctMenu')), 'menu tài khoản có Đổi mật khẩu và Đăng xuất');
+  await page.keyboard.press('Escape'); ok(!(await page.isVisible('#acctMenu')), 'Esc đóng menu tài khoản');
+  /* Cần chú ý: gộp 1 khối, quá 2 dòng thì Xem thêm */
+  ok(await page.locator('#confBox .attn').count() === 1 && /Cần chú ý \(2\)/.test(await page.textContent('#confBox')), 'cảnh báo gộp trong 1 khối "Cần chú ý (2)"');
+  ok(await page.locator('#confBox [data-more]').count() === 0, '2 cảnh báo: chưa cần "Xem thêm"');
+  await page.evaluate(() => setWeak(true));
+  ok(await page.locator('#confBox [data-more="attn"]').count() === 1 && await page.locator('#confBox .ar:visible').count() === 2, '3 cảnh báo: hiện 2 dòng + "Xem thêm"');
+  await page.click('#confBox [data-more="attn"]');
+  ok(await page.locator('#confBox .ar:visible').count() === 3, 'bấm Xem thêm: hiện đủ 3 dòng');
+  await page.evaluate(() => { setWeak(false); EXT.conflicts = []; EXT.dupes = []; renderConf(); });
+  ok((await page.textContent('#confBox')).trim() === '', 'không còn cảnh báo: khối ẩn hẳn');
+  /* Đặt phòng sắp tới: 5 thẻ + Xem thêm; bấm thẻ mới thấy nút */
+  ok(await page.locator('#upList .bkc:visible').count() === 5, 'đặt phòng sắp tới: hiện 5 thẻ đầu');
+  ok(await page.locator('#upList [data-more="up"]').count() === 1, 'có nút Xem thêm đặt phòng');
+  ok(await page.locator('#upList .bkc-body:visible').count() === 0, 'thẻ đóng: chưa thấy SĐT, mã, nút hành động');
+  const cardH = await page.evaluate(() => document.querySelector('#upList .bkc').getBoundingClientRect().height);
+  ok(cardH < 110, 'thẻ đóng gọn (cao ' + Math.round(cardH) + 'px)');
+  await openCard(page, 'bk1');
+  ok(await page.locator('#upList .bkc[data-id="bk1"] .bkc-body:visible [data-bkedit], #upList .bkc[data-id="bk1"] .bkc-body:visible [data-bkdel]').count() === 2, 'bấm thẻ: hiện nút Sửa và Xóa');
+  const order = await page.$$eval('#upList .bkc[data-id="bk1"] .acts > *', bs => bs.map(b => b.textContent.trim()));
+  ok(/^Xóa$/.test(order[order.length - 1]), 'nút Xóa nằm cuối hàng nút (' + order.join(' | ') + ')');
+  ok(/Có mã cửa/.test(await page.textContent('#upList .bkc[data-id="bk1"] .bkc-head')) && /Đã thu/.test(await page.textContent('#upList .bkc[data-id="bk1"] .bkc-head')), 'thẻ có chip "Đã thu" và "Có mã cửa"');
+  await page.click('#upList [data-more="up"]');
+  ok(await page.locator('#upList .bkc:visible').count() > 5, 'Xem thêm: hiện thêm đặt phòng');
+  /* TÀI CHÍNH: thẻ đối soát không còn chèn ở Trang chủ */
+  ok(await page.locator('#upList .panel, #upList [data-go="fin"]').count() === await page.locator('#upList .bkc[data-id^="ext:"] [data-go="fin"]').count(), 'Trang chủ không chèn thẻ tài chính dưới từng đơn (chỉ nút "Đối soát" trên đơn nền tảng)');
+  ok(await page.locator('#home #otaFinance').count() === 0 && await page.locator('#fin #otaFinance').count() === 1, '"Tài chính từ nền tảng" chỉ nằm ở tab Tài chính');
+  /* Thông báo: đáy Trang chủ, thu gọn */
+  const isLast = await page.evaluate(() => { const k = document.querySelector('#home > .stack').children; return k[k.length - 1].id === 'pushPanel'; });
+  ok(isLast, 'khối thông báo nằm cuối Trang chủ');
+  ok(await page.evaluate(() => !document.querySelector('#pushPanel').open) && /Thông báo trên máy này/.test(await page.textContent('#pushPanel summary')) && /Chưa bật|Đã bật/.test(await page.textContent('#pushPanel summary')), 'thông báo thu gọn, 1 dòng trạng thái ở tiêu đề');
+  await page.click('#pushPanel summary');
+  ok(await page.locator('#pushHistory .li:visible').count() === 5, 'mở ra: lịch sử tối đa 5 mục gần nhất (30 mục có sẵn)');
+  ok(await page.isVisible('#pushMore') && /Xem thêm \(25\)/.test(await page.textContent('#pushMore')), 'có nút Xem thêm (25)');
+  const sentences = (await page.textContent('#pushPanel .fold-body > p')).split(/[.!?]\s/).filter(x => x.trim()).length;
+  ok(sentences <= 2, 'giải thích thông báo ngắn (≤ 2 câu, có ' + sentences + ')');
+  /* vùng bấm tối thiểu 40px trên Trang chủ và các tab chính */
+  for (const t of ['home', 'guests', 'fin', 'clean', 'items', 'notes']) {
+    await goTab(page, t); await page.waitForTimeout(100);
+    const small = await page.evaluate(() => [...document.querySelectorAll('button, a.btn, select, input[type=text], input[type=number], input[type=date]')].filter(e => e.offsetParent && !e.closest('[hidden]') && !e.closest('.sheet')).map(e => ({ e, r: e.getBoundingClientRect() })).filter(x => x.r.height > 0 && x.r.height < 39.5).map(x => (x.e.id || x.e.className || x.e.tagName) + ' ' + Math.round(x.r.height) + 'px'));
+    ok(small.length === 0, 'tab ' + t + ': mọi nút/ô nhập cao ≥ 40px' + (small.length ? ' — ' + small.slice(0, 4).join('; ') : ''));
+  }
+  ok(errors.length === 0, 'không lỗi JS' + errors.join('|'));
+  await ctx.close();
+  /* máy tính */
+  ({ ctx, page, errors } = await newPage(browser, base, mk(), { w: 1280 }));
+  ok(!(await page.isVisible('#botnav')) && await page.isVisible('#tabs'), '1280px: thanh tab đáy ẩn, hàng tab trên hiện');
+  const cols = await page.evaluate(() => { const a = document.querySelector('#calPanel').getBoundingClientRect(), b = document.querySelector('#todoPanel').getBoundingClientRect(); return b.left > a.right - 2 || a.left > b.right - 2; });
+  ok(cols, '1280px: Trang chủ chia 2 cột (lịch và việc/đặt phòng cạnh nhau)');
+  ok(await overflow(page) <= 0, '1280px: không tràn ngang');
+  ok(errors.length === 0, 'không lỗi JS' + errors.join('|'));
+  await ctx.close();
+  /* 320px: đầu trang vừa khít */
+  ({ ctx, page, errors } = await newPage(browser, base, mk(), { w: 320 }));
+  ok(await overflow(page) <= 0, '320px: Trang chủ không tràn ngang');
+  const hdr = await page.evaluate(() => { const r = document.querySelector('#who').getBoundingClientRect(); return r.right <= innerWidth && r.left >= 0; });
+  ok(hdr, '320px: chấm đồng bộ và nút tài khoản nằm gọn trong màn hình');
+  await ctx.close();
+}
+
+async function groupShots(browser, base) {
+  const dir = process.env.SHOTS_DIR, pre = process.env.SHOTS_PREFIX || '';
+  if (!dir) return;
+  console.log('# chụp ảnh màn hình vào ' + dir);
+  fs.mkdirSync(dir, { recursive: true });
+  const mk = () => fakeServer('moi', { extra: 8, pushItems: 30, conflicts: [{ s: addD(10), e: addD(12), src: ['airbnb', 'app'] }], dupes: [{ s: addD(30), e: addD(32), src: ['app', 'booking'] }] });
+  let { ctx, page } = await newPage(browser, base, mk(), { w: 390 });
+  const shot = async name => { await page.setViewportSize({ width: page.viewportSize().width, height: Math.min(6000, await page.evaluate(() => document.documentElement.scrollHeight)) }); await page.waitForTimeout(250); await page.screenshot({ path: path.join(dir, pre + name + '.png'), fullPage: true }); console.log('  ' + pre + name + '.png'); };
+  console.log('  Trang chủ 390px cao ' + await page.evaluate(() => document.documentElement.scrollHeight) + 'px');
+  await shot('390-trang-chu');
+  await page.evaluate(() => { document.querySelector('#upPanel').scrollIntoView(); });
+  try { await openCard(page, 'bk1'); } catch (e) { }
+  await page.waitForTimeout(250);
+  await page.locator('#upPanel').screenshot({ path: path.join(dir, pre + '390-dat-phong-mo-rong.png') }); console.log('  ' + pre + '390-dat-phong-mo-rong.png');
+  await goTab(page, 'fin'); await shot('390-tai-chinh');
+  await goTab(page, 'settings'); await shot('390-cai-dat');
+  await ctx.close();
+  ({ ctx, page } = await newPage(browser, base, mk(), { w: 1280 }));
+  await shot('1280-trang-chu');
   await ctx.close();
 }
 
@@ -443,6 +638,7 @@ async function groupPushRenew(browser, base) {
   const srv = await staticServer(); const base = 'http://127.0.0.1:' + srv.address().port;
   const browser = await chromium.launch({ headless: true });
   try {
+    if (process.env.ONLY === 'shots') { await groupShots(browser, base); await browser.close(); srv.close(); return process.exit(0); }
     for (const mode of (process.env.MODES||"cu,moi").split(",")) {
       console.log('\n===== MÁY CHỦ GIẢ: ' + (mode === 'cu' ? 'CŨ (3.4/3.5)' : 'MỚI') + ' =====');
       await groupLayout(browser, base, mode);
@@ -451,11 +647,15 @@ async function groupPushRenew(browser, base) {
       await groupFinanceAndCode(browser, base, mode);
       await groupForm(browser, base, mode);
       await groupGuestCode(browser, base, mode);
+      await groupGuestSync(browser, base, mode);
+      await groupStaffPrices(browser, base, mode);
       await groupAgo(browser, base, mode);
       await groupLogout(browser, base, mode);
       await groupOta(browser, base, mode);
     }
+    await groupUi(browser, base);
     await groupPushRenew(browser, base);
+    await groupShots(browser, base);
   } catch (e) { fails++; console.log('FAIL ngoại lệ: ' + (e.stack || e)); }
   await browser.close(); srv.close();
   console.log(`\nKết quả: ${passes} đạt, ${fails} lỗi`);
