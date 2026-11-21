@@ -18,7 +18,7 @@ var SETUP_CODE = "";
 // Chỉ lưu muối và mã băm, không lưu mật khẩu. Để trống nếu muốn tạo Admin bằng SETUP_CODE trên trang web.
 var SEED_USERS = [];
 
-var BUILD = "3.5";
+var BUILD = "3.7";
 var TOKEN_DAYS = 14;
 var HASH_ROUNDS = 150;
 var MAX_FAILS = 5;
@@ -46,7 +46,8 @@ function doPost(e) {
   } catch (err) {
     return out_({ ok: false, error: "Yêu cầu không hợp lệ", code: "bad" });
   }
-  var fn = ACTIONS_[req.action];
+  var table = actions_();
+  var fn = Object.prototype.hasOwnProperty.call(table, req.action) ? table[req.action] : null;
   if (!fn) return out_({ ok: false, error: "Không rõ yêu cầu", code: "bad" });
   try {
     return out_(fn(req));
@@ -57,38 +58,51 @@ function doPost(e) {
   }
 }
 
-var ACTIONS_ = {
-  otaInfo: otaInfo_,
-  otaSetConfig: otaSetConfig_,
-  otaAdd: otaAdd_,
-  otaReceive: otaReceive_,
-  pushRegister: pushRegister_,
-  pushUnregister: pushUnregister_,
-  pushInfo: pushInfo_,
-  pushTest: pushTest_,
-  status: status_,
-  bootstrap: bootstrap_,
-  login: login_,
-  me: me_,
-  load: load_,
-  save: save_,
-  changePassword: changePassword_,
-  listUsers: listUsers_,
-  createUser: createUser_,
-  setPassword: setPassword_,
-  setRole: setRole_,
-  setActive: setActive_,
-  deleteUser: deleteUser_,
-  extInfo: extInfo_,
-  setExt: setExt_,
-  syncExt: syncExt_,
-  rotateIcs: rotateIcs_,
-  ttInfo: ttInfo_,
-  ttSet: ttSet_,
-  ttPick: ttPick_,
-  ttCode: ttCode_,
-  ttCodeExt: ttCodeExt_
-};
+// Bảng action được dựng lúc có yêu cầu (không phải lúc nạp file) để không phụ thuộc thứ tự nạp các file .gs.
+// Push.gs và OtaFinance.gs là phần tùy chọn: thiếu file nào thì action của file đó trả code "missing", phần còn lại vẫn chạy.
+function missing_(part) {
+  return function () {
+    fail_("missing", "Máy chủ thiếu phần " + part + ". Hãy dán thêm file này vào Apps Script rồi triển khai lại.");
+  };
+}
+
+function actions_() {
+  var a = {
+    status: status_,
+    bootstrap: bootstrap_,
+    login: login_,
+    me: me_,
+    load: load_,
+    save: save_,
+    changePassword: changePassword_,
+    listUsers: listUsers_,
+    createUser: createUser_,
+    setPassword: setPassword_,
+    setRole: setRole_,
+    setActive: setActive_,
+    deleteUser: deleteUser_,
+    extInfo: extInfo_,
+    setExt: setExt_,
+    syncExt: syncExt_,
+    rotateIcs: rotateIcs_,
+    ttInfo: ttInfo_,
+    ttSet: ttSet_,
+    ttPick: ttPick_,
+    ttCode: ttCode_,
+    ttCodeExt: ttCodeExt_
+  };
+  var O = "OtaFinance.gs", P = "Push.gs";
+  a.otaInfo = typeof otaInfo_ === "function" ? otaInfo_ : missing_(O);
+  a.otaSetConfig = typeof otaSetConfig_ === "function" ? otaSetConfig_ : missing_(O);
+  a.otaAdd = typeof otaAdd_ === "function" ? otaAdd_ : missing_(O);
+  a.otaReceive = typeof otaReceive_ === "function" ? otaReceive_ : missing_(O);
+  a.otaCancel = typeof otaCancel_ === "function" ? otaCancel_ : missing_(O);
+  a.pushRegister = typeof pushRegister_ === "function" ? pushRegister_ : missing_(P);
+  a.pushUnregister = typeof pushUnregister_ === "function" ? pushUnregister_ : missing_(P);
+  a.pushInfo = typeof pushInfo_ === "function" ? pushInfo_ : missing_(P);
+  a.pushTest = typeof pushTest_ === "function" ? pushTest_ : missing_(P);
+  return a;
+}
 
 /* ---------- tiện ích ---------- */
 
@@ -157,6 +171,16 @@ function key_() {
   return k;
 }
 
+// So sánh chuỗi theo thời gian không phụ thuộc vị trí khác biệt.
+function safeEq_(a, b) {
+  a = String(a);
+  b = String(b);
+  var diff = a.length ^ b.length;
+  var n = Math.max(a.length, b.length);
+  for (var i = 0; i < n; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+
 function sign_(s) {
   return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(s, key_()));
 }
@@ -174,7 +198,7 @@ function auth_(req, needAdmin) {
   var i = t.indexOf(".");
   if (i < 1) fail_("auth", "Chưa đăng nhập");
   var p = t.slice(0, i);
-  if (sign_(p) !== t.slice(i + 1)) fail_("auth", "Phiên đăng nhập không hợp lệ");
+  if (!safeEq_(sign_(p), t.slice(i + 1))) fail_("auth", "Phiên đăng nhập không hợp lệ");
   var d;
   try {
     d = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(p)).getDataAsString());
@@ -270,7 +294,22 @@ function throttle_(key) {
   if (fails >= MAX_FAILS) fail_("locked", "Thử sai quá nhiều lần. Vui lòng đợi 10 phút rồi thử lại.");
   return {
     fail: function () {
-      cache.put(key, String(fails + 1), 600);
+      // Đọc-tăng-ghi trong khóa ngắn để các lần sai đồng thời không bị tính thiếu; không lấy được khóa thì tính như cũ.
+      var lk = null, got = false, n = fails;
+      try {
+        lk = LockService.getScriptLock();
+        got = lk.tryLock(2000);
+      } catch (err) {
+        got = false;
+      }
+      try {
+        if (got) n = Number(cache.get(key) || 0);
+        cache.put(key, String(n + 1), 600);
+      } finally {
+        if (got) {
+          try { lk.releaseLock(); } catch (err2) {}
+        }
+      }
     },
     clear: function () {
       cache.remove(key);
@@ -369,7 +408,7 @@ function load_(req) {
     var m = meta_();
     var x = extState_();
     var extPart = { extAt: x.at, tt: ttReady_() };
-    if (Number(req.extSince) !== x.at) extPart.ext = x.events;
+    if (Number(req.extSince) !== x.at) { extPart.ext = x.events; extPart.extConflicts = x.conflicts; extPart.extDupes = x.dupes; }
     if (req.since !== undefined && Number(req.since) === m.version) {
       return Object.assign({ ok: true, notModified: true, version: m.version }, extPart);
     }
@@ -389,7 +428,7 @@ function save_(req) {
       var cur = readData_();
       return { ok: false, conflict: true, version: m.version, updatedAt: m.updatedAt, updatedBy: m.updatedBy, data: cur ? JSON.parse(cur) : null };
     }
-    otaProtectSave_(req.data, JSON.parse(readData_() || '{}'));
+    if (typeof otaProtectSave_ === "function") otaProtectSave_(req.data, JSON.parse(readData_() || '{}'));
     str = JSON.stringify(req.data);
     if (str.length > MAX_DATA_CHARS) fail_('big', 'Dữ liệu quá lớn');
     writeData_(str);
@@ -514,38 +553,122 @@ function icsStamp_(ms) {
   return new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
 }
 
-// Chỉ xuất ngày bị chặn, không có tên, số điện thoại, giá hay ghi chú của khách.
-function icsText_() {
-  var bookings = [];
-  var raw = readData_();
-  if (raw) {
+/* ---------- ghi nhớ những gì đã xuất, để nhận ra bản sao do nền tảng xuất ngược ---------- */
+var ICS_ECHO_GRACE = 2 * 3600000;      // bản sao có thể xuất hiện muộn tới 2 giờ sau lần cuối app còn xuất khoảng đó
+var ICS_SENT_KEEP = 3 * 86400000;      // quên khoảng đã ngừng xuất quá 3 ngày
+var ICS_SENT_MAX = 6000;               // kích thước tối đa của ICS_SENT (ký tự)
+var ICS_RELEASE = 36 * 3600000;        // cờ bản sao được nhả (thành đơn thật) nếu sự kiện còn sau ngần này thời gian kể từ khi nguồn che phủ nó biến mất
+var EXT_ORDER = ["booking", "agoda", "airbnb"]; // thứ tự xét đơn mới đọc cùng lúc: nguồn đứng trước được coi là đơn gốc
+
+function icsSentRead_() {
+  try {
+    var o = JSON.parse(props_().getProperty("ICS_SENT") || "{}");
+    return o && typeof o === "object" && !Array.isArray(o) ? o : {};
+  } catch (err) { return {}; }
+}
+
+// Ghi nhận các khoảng ngày ("s|e") đang xuất ở thời điểm now. Lỗi thì bỏ qua, không làm hỏng việc trả lịch.
+function icsSentUpdate_(keys, now) {
+  try {
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(3000)) return;
     try {
-      bookings = JSON.parse(raw).bookings || [];
-    } catch (err) {}
-  }
-  var m = meta_();
-  var mod = icsStamp_(m.updatedAt || Date.now());
-  var seq = m.version || 0;
+      var sent = icsSentRead_();
+      var today = new Date(now + 7 * 3600000).toISOString().slice(0, 10);
+      keys.forEach(function (k) {
+        var v = sent[k];
+        if (v && v[1] + ICS_ECHO_GRACE >= now) sent[k] = [v[0], now];
+        else sent[k] = [now, now]; // chưa có, hoặc đã ngừng xuất lâu rồi xuất lại: tính từ đầu
+      });
+      Object.keys(sent).forEach(function (k) {
+        var v = sent[k];
+        if (!v || v.length < 2 || v[1] < now - ICS_SENT_KEEP || k.split("|")[1] < today) delete sent[k];
+      });
+      var str = JSON.stringify(sent);
+      if (str.length > ICS_SENT_MAX) {
+        var ks = Object.keys(sent).sort(function (a, b) { return sent[a][1] - sent[b][1]; });
+        while (str.length > ICS_SENT_MAX && ks.length) { delete sent[ks.shift()]; str = JSON.stringify(sent); }
+      }
+      props_().setProperty("ICS_SENT", str);
+    } finally { lock.releaseLock(); }
+  } catch (err) {}
+}
+
+// Hợp các khoảng [s,e) có phủ trọn [s,e) không (hai khoảng liền nhau được gộp).
+function icsUnionCovers_(list, s, e) {
+  var iv = list.slice().sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; });
+  var curS = null, curE = null, ok = false;
+  function chk() { if (curS !== null && curS <= s && curE >= e) ok = true; }
+  iv.forEach(function (x) {
+    if (curS !== null && x[0] <= curE) { if (x[1] > curE) curE = x[1]; }
+    else { chk(); curS = x[0]; curE = x[1]; }
+  });
+  chk();
+  return ok;
+}
+
+// Bản sao do chính nền tảng xuất ngược: nằm trọn trong các khoảng app đã xuất, và xuất hiện sau khi app bắt đầu xuất, trước khi app ngừng xuất quá 2 giờ.
+function icsEchoOf_(sent, s, e, firstSeen) {
+  var iv = [];
+  Object.keys(sent).forEach(function (k) {
+    var v = sent[k];
+    if (v && v[0] < firstSeen && firstSeen <= v[1] + ICS_ECHO_GRACE) { var p = k.split("|"); iv.push([p[0], p[1]]); }
+  });
+  return icsUnionCovers_(iv, s, e);
+}
+
+// Các khoảng ngày của đặt phòng trong app, tính như khi xuất lịch.
+function appRanges_() {
+  var out = [];
+  var raw = readData_();
+  if (!raw) return out;
+  var bookings = [];
+  try { bookings = JSON.parse(raw).bookings || []; } catch (err) {}
   var cut = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-  var L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//DearSunday//Lich//VI", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:Dear Sunday"];
   bookings.forEach(function (b) {
     if (!b || !b.id || !b.startAt || !b.endAt) return;
     var s = String(b.startAt).slice(0, 10);
     var e = String(b.endAt).slice(0, 10);
     if (e < cut) return;
     if (e <= s) e = icsAddDay_(s); // gói trong ngày chặn cả ngày đó
-    L.push("BEGIN:VEVENT", "UID:" + String(b.id).replace(/[^A-Za-z0-9_-]/g, "") + "@dearsunday", "DTSTAMP:" + mod, "LAST-MODIFIED:" + mod, "SEQUENCE:" + seq,
+    out.push({ id: b.id, s: s, e: e });
+  });
+  return out;
+}
+
+// Chỉ xuất ngày bị chặn, không có tên, số điện thoại, giá, ghi chú hay tên nguồn. Gồm đặt phòng trong app và đơn thật từ các nền tảng (không gồm bản sao).
+function icsBuild_() {
+  var m = meta_();
+  var mod = icsStamp_(m.updatedAt || Date.now());
+  var seq = m.version || 0;
+  var cut = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  var keys = {};
+  var L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//DearSunday//Lich//VI", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:Dear Sunday"];
+  function ev(uid, s, e) {
+    keys[s + "|" + e] = 1;
+    L.push("BEGIN:VEVENT", "UID:" + uid + "@dearsunday", "DTSTAMP:" + mod, "LAST-MODIFIED:" + mod, "SEQUENCE:" + seq,
       "DTSTART;VALUE=DATE:" + icsDate_(s), "DTEND;VALUE=DATE:" + icsDate_(e), "SUMMARY:Reserved", "TRANSP:OPAQUE", "END:VEVENT");
+  }
+  appRanges_().forEach(function (b) { ev(String(b.id).replace(/[^A-Za-z0-9_-]/g, ""), b.s, b.e); });
+  extReal_().forEach(function (x) {
+    if (x.e < cut) return;
+    ev("ext-" + (EXT_ORDER.indexOf(x.src) + 1) + "-" + x.s + "-" + x.e, x.s, x.e); // mã số thay tên nguồn để không lộ tên nền tảng
   });
   L.push("END:VCALENDAR");
-  return L.join("\r\n") + "\r\n";
+  return { text: L.join("\r\n") + "\r\n", keys: Object.keys(keys) };
+}
+
+function icsText_() {
+  return icsBuild_().text;
 }
 
 function ics_(token) {
-  if (token !== icsToken_()) {
+  if (!safeEq_(token, icsToken_())) {
     return out_({ ok: false, service: "DearSunday", build: BUILD, error: "Địa chỉ lịch không đúng" });
   }
-  return ContentService.createTextOutput(icsText_()).setMimeType(ContentService.MimeType.ICAL);
+  var b = icsBuild_();
+  icsSentUpdate_(b.keys, Date.now());
+  return ContentService.createTextOutput(b.text).setMimeType(ContentService.MimeType.ICAL);
 }
 
 // Chạy trong editor để xem địa chỉ lịch cần dán vào Airbnb, Booking.
@@ -567,7 +690,7 @@ function rotateIcs_(req) {
 
 /* ---------- nhập lịch từ Airbnb, Booking (iCal) ---------- */
 
-var EXT_SOURCES = { airbnb: "Airbnb", booking: "Booking.com" };
+var EXT_SOURCES = { airbnb: "Airbnb", booking: "Booking.com", agoda: "Agoda" };
 
 function extSrc_() {
   var raw = props_().getProperty("EXT_SRC");
@@ -584,11 +707,18 @@ function icsFold_(txt) {
 }
 
 function icsDay_(v) {
+  v = String(v || "").trim();
+  var u = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/i.exec(v);
+  if (u) {
+    // Giờ UTC: đổi sang ngày theo giờ Việt Nam (+07:00)
+    var t = new Date(Date.UTC(+u[1], +u[2] - 1, +u[3], +u[4], +u[5], +u[6]) + 7 * 3600000);
+    return t.toISOString().slice(0, 10);
+  }
   var m = /(\d{4})(\d{2})(\d{2})/.exec(v || "");
   return m ? m[1] + "-" + m[2] + "-" + m[3] : "";
 }
 
-// Đọc các VEVENT thành cặp ngày [bắt đầu, kết thúc). Bỏ sự kiện đã hủy, đã qua, và sự kiện do chính Dear Sunday xuất ra.
+// Đọc các VEVENT thành [bắt đầu, kết thúc, dấu hiệu đơn thật 0/1). Bỏ sự kiện đã hủy, đã qua, và sự kiện do chính Dear Sunday xuất ra.
 function parseIcs_(txt) {
   var cut = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   var lines = icsFold_(txt).split(/\r?\n/);
@@ -601,7 +731,10 @@ function parseIcs_(txt) {
         if (!e || e <= cur.s) e = icsAddDay_(cur.s);
         if (e >= cut) {
           var k = cur.s + "|" + e;
-          if (!seen[k]) { seen[k] = 1; out.push([cur.s, e]); }
+          // dấu hiệu đơn thật của Airbnb: SUMMARY đúng "Reserved" hoặc có đường dẫn đơn
+          var real = (cur.sum === "Reserved" || /Reservation URL|reservations\/details/i.test(cur.desc || "")) ? 1 : 0;
+          if (!seen[k]) { seen[k] = out.length + 1; out.push([cur.s, e, real]); }
+          else if (real) out[seen[k] - 1][2] = 1;
         }
       }
       cur = null;
@@ -615,37 +748,165 @@ function parseIcs_(txt) {
     if (name === "DTSTART") cur.s = icsDay_(val);
     else if (name === "DTEND") cur.e = icsDay_(val);
     else if (name === "STATUS") cur.cancel = /CANCEL/i.test(val);
-    else if (name === "SUMMARY") cur.sum = val;
+    else if (name === "SUMMARY") cur.sum = val.trim();
+    else if (name === "DESCRIPTION") cur.desc = val;
     else if (name === "UID") cur.uid = val;
   });
   out.sort(function (a, b) { return a[0] < b[0] ? -1 : 1; });
   return out.slice(0, 300);
 }
 
+// Đơn thật từ nền tảng (bỏ bản sao). Bản ghi cũ dạng [s,e] coi là đơn thật.
+function extReal_() {
+  var out = [];
+  Object.keys(EXT_SOURCES).forEach(function (id) {
+    var r = extRec_(id);
+    if (r && r.ev) r.ev.forEach(function (x) { if (!x[3]) out.push({ src: id, s: x[0], e: x[1] }); });
+  });
+  return out;
+}
+
 function fetchExt_() {
   var p = props_();
   var src = extSrc_();
+  var now = Date.now();
+  // ghi nhớ những gì đang xuất trước khi xét bản sao, để luôn có dữ liệu dù nền tảng chưa gọi ?ics
+  try { icsSentUpdate_(icsBuild_().keys, now); } catch (err) {}
+  var sent = icsSentRead_();
+  var recs = {}, olds = {};
   Object.keys(EXT_SOURCES).forEach(function (id) {
-    if (!src[id]) { p.deleteProperty("EXT_" + id); return; }
+    if (!src[id]) { p.deleteProperty("EXT_" + id); p.deleteProperty("PUSH_BASE_" + id); return; }
     var old = extRec_(id);
     var rec = { at: Date.now(), ok: false, err: "", ev: [] };
+    var raw = null;
     try {
       var r = UrlFetchApp.fetch(src[id], { muteHttpExceptions: true, followRedirects: true });
       var code = r.getResponseCode();
       var body = r.getContentText();
       if (code !== 200) rec.err = "Nền tảng trả về mã " + code;
       else if (body.indexOf("BEGIN:VCALENDAR") < 0) rec.err = "Địa chỉ này không phải lịch iCal";
-      else { rec.ok = true; rec.ev = parseIcs_(body); }
+      else { rec.ok = true; raw = parseIcs_(body); }
     } catch (err) {
-      rec.err = "Không đọc được: " + String(err && err.message).slice(0, 120);
+      // Không lưu thông điệp lỗi gốc: có thể chứa địa chỉ iCal bí mật.
+      rec.err = "Không tải được lịch";
     }
-    if (!rec.ok && old && old.ev) rec.ev = old.ev; // lỗi tạm thời thì giữ lịch lần trước
+    if (!rec.ok) {
+      if (old && old.ev) rec.ev = old.ev; // lỗi tạm thời thì giữ lịch lần trước
+    } else {
+      // sự kiện đã biết giữ nguyên cờ (echo/mirror giữ đến khi sự kiện biến mất); sự kiện mới: 0 = đơn thật, null = chưa xét
+      var prev = {};
+      ((old && old.ev) || []).forEach(function (x) { prev[x[0] + "|" + x[1]] = x; });
+      rec.ev = raw.map(function (x) {
+        var o = prev[x[0] + "|" + x[1]];
+        if (o && o[2]) return x[2] || !o[3] ? [x[0], x[1], o[2], 0] : (o[4] ? [x[0], x[1], o[2], o[3], o[4]] : [x[0], x[1], o[2], o[3]]);
+        return [x[0], x[1], now, x[2] ? 0 : null];
+      });
+    }
+    recs[id] = rec; olds[id] = old;
+  });
+  // Xét các sự kiện mới. (1) echo: khớp những gì app đã xuất. (2) mirror: nằm trọn trong đơn thật của NỀN TẢNG khác
+  // (khi chủ nhà nối trực tiếp các nền tảng với nhau). Đặt phòng trong app không dùng để xét mirror (nhân viên có thể tự nhập
+  // đơn nền tảng vào app rồi xóa; đơn nền tảng không được vì thế mà thôi xuất).
+  EXT_ORDER.forEach(function (id) {
+    var rec = recs[id];
+    if (!rec) return;
+    rec.ev.forEach(function (x) {
+      if (x[3] !== null) return;
+      if (icsEchoOf_(sent, x[0], x[1], x[2])) { x[3] = 1; return; } // 1 = echo
+      var base = [];
+      Object.keys(recs).forEach(function (o) {
+        if (o !== id) recs[o].ev.forEach(function (y) { if (y[3] === 0 || y[3] === undefined) base.push([y[0], y[1]]); });
+      });
+      x[3] = icsUnionCovers_(base, x[0], x[1]) ? 2 : 0; // 2 = mirror
+    });
+  });
+  // Nhả cờ: bản sao còn tồn tại quá 36 giờ sau khi nguồn che phủ nó biến mất thì là đơn thật (vd nhân viên nhập tay vào app rồi xóa).
+  // ev[4] = mốc nguồn che phủ biến mất; che phủ trở lại thì xóa mốc.
+  Object.keys(recs).forEach(function (id) {
+    var rec = recs[id];
+    if (!rec.ok) return;
+    rec.ev.forEach(function (x) {
+      if (!x[3]) return;
+      var covered, since = now;
+      if (x[3] === 1) {
+        var act = [], lastOv = 0;
+        Object.keys(sent).forEach(function (k) {
+          var v = sent[k], q = k.split("|");
+          if (v && q[0] < x[1] && x[0] < q[1]) { if (v[1] > lastOv) lastOv = v[1]; if (v[1] >= now - ICS_ECHO_GRACE) act.push([q[0], q[1]]); }
+        });
+        covered = icsUnionCovers_(act, x[0], x[1]);
+        if (lastOv) since = lastOv;
+      } else {
+        var oth = [];
+        Object.keys(recs).forEach(function (o) {
+          if (o !== id) recs[o].ev.forEach(function (y) { if (y[3] === 0 || y[3] === undefined) oth.push([y[0], y[1]]); });
+        });
+        covered = icsUnionCovers_(oth, x[0], x[1]);
+      }
+      if (covered) { x.length = 4; return; }
+      if (!x[4]) x[4] = since;
+      if (now - x[4] >= ICS_RELEASE) { x[3] = 0; x.length = 4; }
+    });
+  });
+  Object.keys(recs).forEach(function (id) {
+    var rec = recs[id];
     p.setProperty("EXT_" + id, JSON.stringify(rec));
-    try { pushCalendarChange_(id, old, rec); } catch (e) { p.setProperty("PUSH_LAST_ERROR", "Không ghi được thông báo lịch."); }
+    try { if (typeof pushCalendarChange_ === "function") pushCalendarChange_(id, olds[id], rec); } catch (e) { p.setProperty("PUSH_LAST_ERROR", "Không ghi được thông báo lịch."); }
   });
   p.setProperty("EXT_AT", String(Date.now()));
-  try { otaCapture_(); } catch (e) { console.error('Không lưu được mục đối soát nền tảng'); }
-  try { pushFlush_(); } catch (e) { p.setProperty("PUSH_LAST_ERROR", "Không gửi được thông báo; kiểm tra quyền Apps Script."); }
+  try { extConflictsUpdate_(); } catch (e) { console.error("Không cập nhật được báo trùng"); }
+  try { icsSentUpdate_(icsBuild_().keys, Date.now()); } catch (err) {}
+  try { if (typeof otaCapture_ === "function") otaCapture_(); } catch (e) { console.error('Không lưu được mục đối soát nền tảng'); }
+  try { if (typeof pushFlush_ === "function") pushFlush_(); } catch (e) { p.setProperty("PUSH_LAST_ERROR", "Không gửi được thông báo; kiểm tra quyền Apps Script."); }
+}
+
+var CONF_NAMES = { app: "App", airbnb: "Airbnb", booking: "Booking.com", agoda: "Agoda" };
+
+// Chồng lấn giữa đơn thật của các nguồn khác nhau, hoặc đơn thật của nền tảng với đặt phòng trong app. Không có tên khách.
+// Đặt phòng app có ĐÚNG ngày nhận và trả như đơn nền tảng: không phải trùng đỏ mà là "dupes" (có thể là cùng một khách nhập tay).
+function extConflicts_() {
+  var items = appRanges_().map(function (b) { return { n: "app", s: b.s, e: b.e }; });
+  extReal_().forEach(function (x) { items.push({ n: x.src, s: x.s, e: x.e }); });
+  var out = [], dupes = [];
+  for (var i = 0; i < items.length; i++) for (var j = i + 1; j < items.length; j++) {
+    var a = items[i], b = items[j];
+    if (a.n === b.n || !(a.s < b.e && b.s < a.e)) continue;
+    if ((a.n === "app" || b.n === "app") && a.s === b.s && a.e === b.e) { dupes.push({ s: a.s, e: a.e, src: [a.n, b.n].sort() }); continue; }
+    var ka = a.n + "|" + a.s + "|" + a.e, kb = b.n + "|" + b.s + "|" + b.e;
+    out.push({ k: [ka, kb].sort().join("~"), s: a.s > b.s ? a.s : b.s, e: a.e < b.e ? a.e : b.e, src: [a.n, b.n].sort() });
+  }
+  var byS = function (x, y) { return x.s < y.s ? -1 : x.s > y.s ? 1 : 0; };
+  out.sort(byS); dupes.sort(byS);
+  return { conflicts: out.slice(0, 20), dupes: dupes.slice(0, 20) };
+}
+
+function extConflictsUpdate_() {
+  var p = props_();
+  var all = extConflicts_();
+  var cur = all.conflicts;
+  p.setProperty("EXT_DUPE", JSON.stringify(all.dupes));
+  var raw = p.getProperty("EXT_CONF");
+  var prev = null;
+  try { prev = raw ? JSON.parse(raw) : null; } catch (err) { prev = null; }
+  p.setProperty("EXT_CONF", JSON.stringify(cur));
+  if (prev === null) return; // lần đầu: ghi mốc, không báo
+  var known = {};
+  prev.forEach(function (c) { known[c.k] = 1; });
+  var added = cur.filter(function (c) { return !known[c.k]; });
+  if (!added.length) return;
+  if (typeof pushConflict_ === "function") {
+    var body = "Trùng ngày: " + added.map(function (c) {
+      return c.s + " → " + c.e + " (" + c.src.map(function (n) { return CONF_NAMES[n] || n; }).join(", ") + ")";
+    }).join("; ") + ". Mở app để kiểm tra.";
+    try { pushConflict_(body); } catch (e) { p.setProperty("PUSH_LAST_ERROR", "Không ghi được thông báo trùng lịch."); }
+  }
+}
+
+function extConfOut_(key) {
+  var raw = props_().getProperty(key || "EXT_CONF");
+  var list = [];
+  try { list = raw ? JSON.parse(raw) : []; } catch (err) {}
+  return list.map(function (c) { return { s: c.s, e: c.e, src: c.src }; });
 }
 
 function extCodes_() {
@@ -659,13 +920,14 @@ function extState_() {
   Object.keys(EXT_SOURCES).forEach(function (id) {
     var r = extRec_(id);
     if (r && r.ev) r.ev.forEach(function (x) {
+      if (x[3]) return; // bản sao (echo/mirror): app không thấy
       var ev = { src: id, s: x[0], e: x[1] };
       var c = codes[id + "|" + x[0] + "|" + x[1]];
       if (c) { ev.code = c.code; ev.codeFrom = c.from; ev.codeTo = c.to; }
       events.push(ev);
     });
   });
-  return { at: Number(props_().getProperty("EXT_AT") || 0), events: events };
+  return { at: Number(props_().getProperty("EXT_AT") || 0), events: events, conflicts: extConfOut_(), dupes: extConfOut_("EXT_DUPE") };
 }
 
 function extInfo_(req) {
@@ -679,7 +941,7 @@ function extInfoOut_() {
     var r = extRec_(id);
     var host = "";
     if (src[id]) { var m = /^https:\/\/([^\/?#]+)/.exec(src[id]); host = m ? m[1] : ""; }
-    return { id: id, name: EXT_SOURCES[id], has: !!src[id], host: host, at: r ? r.at : null, ok: r ? r.ok : null, err: r ? r.err : "", count: r && r.ev ? r.ev.length : 0 };
+    return { id: id, name: EXT_SOURCES[id], has: !!src[id], host: host, at: r ? r.at : null, ok: r ? r.ok : null, err: r ? r.err : "", count: r && r.ev ? r.ev.filter(function (x) { return !x[3]; }).length : 0, echo: r && r.ev ? r.ev.filter(function (x) { return x[3]; }).length : 0 };
   });
   return { ok: true, sources: list, icsUrl: icsUrl_(), auto: autoOn_() };
 }
@@ -775,13 +1037,13 @@ function ttToken_(force) {
   return b.access_token;
 }
 
-// Gọi API có accessToken. Hết hạn token (mã 10004) thì xin token mới và thử lại một lần.
+// Gọi API có accessToken. Hết hạn/sai token (mã 10003, 10004) thì xin token mới và thử lại một lần.
 function ttCall_(path, params, retried) {
   var c = ttCfg_();
   var form = Object.assign({ clientId: c.clientId, accessToken: ttToken_(!!retried), date: String(Date.now()) }, params || {});
   var b = ttForm_(path, form);
   if (b.errcode && b.errcode !== 0) {
-    if (b.errcode === 10004 && !retried) return ttCall_(path, params, true);
+    if ((b.errcode === 10003 || b.errcode === 10004) && !retried) return ttCall_(path, params, true);
     fail_("tt", "TTLock báo lỗi " + b.errcode + ": " + (b.errmsg || b.description || ""));
   }
   return b;
@@ -838,12 +1100,18 @@ function ttMs_(local) {
 }
 
 // Tạo mã theo khoảng thời gian (loại 3). TTLock làm tròn theo giờ: bắt đầu làm tròn xuống, kết thúc làm tròn lên.
-function ttMakeCode_(startAt, endAt, name) {
-  var c = ttCfg_();
+function ttWindow_(startAt, endAt) {
   var H = 3600000;
   var s = Math.floor(ttMs_(startAt) / H) * H;
   var e = Math.ceil((ttMs_(endAt) + TT_GRACE_AFTER_H * H) / H) * H;
   if (!(e > s)) fail_("bad", "Giờ trả phòng phải sau giờ nhận phòng");
+  return { from: s, to: e };
+}
+
+function ttMakeCode_(startAt, endAt, name) {
+  var c = ttCfg_();
+  var w = ttWindow_(startAt, endAt);
+  var s = w.from, e = w.to;
   var b = ttCall_("/v3/keyboardPwd/get", {
     lockId: String(c.lockId), keyboardPwdVersion: String(c.ver || 4), keyboardPwdType: "3",
     keyboardPwdName: String(name || "Dear Sunday").slice(0, 30), startDate: String(s), endDate: String(e)
@@ -855,17 +1123,22 @@ function ttMakeCode_(startAt, endAt, name) {
 // Ghi thay đổi vào dữ liệu đồng bộ từ phía máy chủ (tăng phiên bản để các máy tự nhận).
 function mutateData_(fn) {
   return withLock_(function () {
-    var raw = readData_();
-    var data = raw ? JSON.parse(raw) : null;
-    if (!data) fail_("bad", "Chưa có dữ liệu đồng bộ trên máy chủ");
-    var res = fn(data);
-    var str = JSON.stringify(data);
-    if (str.length > MAX_DATA_CHARS) fail_("big", "Dữ liệu quá lớn");
-    writeData_(str);
-    var m = meta_();
-    setMeta_({ version: m.version + 1, updatedAt: Date.now(), updatedBy: "ttlock" });
-    return res;
+    return mutateDataLocked_(fn);
   });
+}
+
+// Dùng khi đã đang giữ khóa (khóa script không lồng nhau được).
+function mutateDataLocked_(fn) {
+  var raw = readData_();
+  var data = raw ? JSON.parse(raw) : null;
+  if (!data) fail_("bad", "Chưa có dữ liệu đồng bộ trên máy chủ");
+  var res = fn(data);
+  var str = JSON.stringify(data);
+  if (str.length > MAX_DATA_CHARS) fail_("big", "Dữ liệu quá lớn");
+  writeData_(str);
+  var m = meta_();
+  setMeta_({ version: m.version + 1, updatedAt: Date.now(), updatedBy: "ttlock" });
+  return res;
 }
 
 function applyCode_(b, r) {
@@ -875,19 +1148,33 @@ function applyCode_(b, r) {
   b.codeTo = r.to;
 }
 
+// Trong khóa: nếu đặt phòng đã có mã khớp khung giờ hiện tại thì trả lại mã cũ, không gọi TTLock.
+// Nếu đã đổi giờ thì tạo mã mới và trả replaced + oldCode (mã cũ vẫn còn hiệu lực trên khóa đến hết hạn).
 function ttCode_(req) {
   auth_(req);
   if (!ttReady_()) fail_("bad", "Chưa kết nối khóa TTLock. Admin vào Cài đặt để kết nối.");
   var id = String(req.bookingId || "");
-  var snap = JSON.parse(readData_() || "{}");
-  var b0 = (snap.bookings || []).filter(function (x) { return x.id === id; })[0];
-  if (!b0) fail_("bad", "Chưa tìm thấy đặt phòng này trên máy chủ. Hãy đợi đồng bộ rồi thử lại.");
-  var r = ttMakeCode_(b0.startAt, b0.endAt, b0.name);
-  mutateData_(function (d) {
-    var b = (d.bookings || []).filter(function (x) { return x.id === id; })[0];
-    if (b) applyCode_(b, r);
+  return withLock_(function () {
+    var snap = JSON.parse(readData_() || "{}");
+    var b0 = (snap.bookings || []).filter(function (x) { return x.id === id; })[0];
+    if (!b0) fail_("bad", "Chưa tìm thấy đặt phòng này trên máy chủ. Hãy đợi đồng bộ rồi thử lại.");
+    var w = ttWindow_(b0.startAt, b0.endAt);
+    if (b0.code) {
+      var noWin = b0.codeFrom === undefined && b0.codeTo === undefined; // mã cũ không rõ khung giờ: giữ nguyên
+      if (noWin || (b0.codeFrom === w.from && b0.codeTo === w.to)) {
+        return { ok: true, code: String(b0.code), from: b0.codeFrom === undefined ? w.from : b0.codeFrom, to: b0.codeTo === undefined ? w.to : b0.codeTo };
+      }
+    }
+    var oldCode = b0.code ? String(b0.code) : "";
+    var r = ttMakeCode_(b0.startAt, b0.endAt, b0.name);
+    mutateDataLocked_(function (d) {
+      var b = (d.bookings || []).filter(function (x) { return x.id === id; })[0];
+      if (b) applyCode_(b, r);
+    });
+    var res = { ok: true, code: r.code, from: r.from, to: r.to };
+    if (oldCode) { res.replaced = true; res.oldCode = oldCode; }
+    return res;
   });
-  return { ok: true, code: r.code, from: r.from, to: r.to };
 }
 
 // Bộ hẹn giờ mỗi giờ: tạo mã cho đặt phòng sắp nhận (trong TT_LEAD_HOURS giờ tới) mà chưa có mã.
@@ -900,10 +1187,15 @@ function tuTaoMaKhoa() {
     var s = ttMs_(b0.startAt), e = ttMs_(b0.endAt);
     if (e <= now || s - now > TT_LEAD_HOURS * 3600000) return;
     try {
-      var r = ttMakeCode_(b0.startAt, b0.endAt, b0.name);
-      mutateData_(function (d) {
-        var b = (d.bookings || []).filter(function (x) { return x.id === b0.id; })[0];
-        if (b && !b.code) applyCode_(b, r);
+      withLock_(function () {
+        // đọc lại trong khóa: ttCode_ có thể vừa tạo mã cho đặt phòng này
+        var cur = (JSON.parse(readData_() || "{}").bookings || []).filter(function (x) { return x.id === b0.id; })[0];
+        if (!cur || cur.code) return;
+        var r = ttMakeCode_(cur.startAt, cur.endAt, cur.name);
+        mutateDataLocked_(function (d) {
+          var b = (d.bookings || []).filter(function (x) { return x.id === b0.id; })[0];
+          if (b && !b.code) applyCode_(b, r);
+        });
       });
     } catch (err) {
       console.error("Không tạo được mã cho " + b0.id + ": " + err.message);
@@ -990,5 +1282,3 @@ function ttCodeExt_(req) {
     return { ok: true, code: r.code, from: r.from, to: r.to };
   });
 }
-
-

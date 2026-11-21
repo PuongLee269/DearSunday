@@ -81,6 +81,7 @@ form.row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
 .pill.warn{background:var(--part)}.pill.bad{background:var(--bad-soft);color:var(--bad)}.pill.mute{background:#efe3d0}.pill.good{background:var(--leaf)}.pill.k{background:var(--deep);color:var(--cream)}
 .good{color:var(--good)}.inc{color:var(--good)}.exp{color:var(--bad)}
 .warnbox{background:var(--bad-soft);color:var(--bad);border:3px solid var(--brown);border-radius:16px;padding:9px 12px;font-weight:700;overflow-wrap:anywhere}
+.dupnote{background:var(--part);color:var(--brown);border:2px solid var(--brown);border-radius:12px;padding:6px 10px;font-size:15px;margin-bottom:10px;overflow-wrap:anywhere}
 .warnbox.okbox{background:var(--leaf);color:var(--brown)}
 .empty{padding:10px 0;opacity:.8}
 .linkbtn{font:inherit;font-family:var(--f-head);font-weight:700;background:none;border:0;color:var(--deep);padding:8px 0;cursor:pointer;text-decoration:underline}
@@ -101,7 +102,7 @@ td{padding:10px;border-bottom:2px dashed rgba(74,58,44,.35);vertical-align:middl
 tr:last-child td{border-bottom:0}
 td.num,th.num{text-align:right}
 .code{font-family:var(--f-head);font-size:26px;font-weight:800;letter-spacing:.08em}
-.split{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.split{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))}
 .res{border:3px solid var(--brown);border-radius:18px;padding:10px 12px;display:grid;gap:4px;margin-top:10px;background:#fff}
 .mail{white-space:pre-wrap;background:#fff;border-radius:14px;padding:10px 12px;border:3px dashed var(--brown);margin-top:10px}
 .noteitem{padding:12px 0;border-bottom:2px dashed rgba(74,58,44,.35);display:flex;gap:10px;justify-content:space-between;align-items:flex-start}
@@ -217,6 +218,9 @@ body.locked header,body.locked .wrap{display:none}
 body.syncing .wrap{opacity:.35;pointer-events:none}
 .toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom,0px));transform:translate(-50%,30px);opacity:0;pointer-events:none;background:var(--brown);color:var(--cream);border-radius:999px;padding:12px 20px;font-family:var(--f-head);font-weight:700;font-size:18px;transition:.2s;z-index:60;max-width:calc(100vw - 32px);text-align:center}
 .toast.show{opacity:1;transform:translate(-50%,0)}
+.askbox{position:fixed;left:50%;bottom:max(14px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(560px,calc(100vw - 24px));z-index:70;background:var(--cream);border:4px solid var(--brown);border-radius:22px;box-shadow:var(--shadow);padding:12px 14px;display:grid;gap:10px;overflow-wrap:anywhere}
+.askbox .bar{justify-content:flex-start}
+.pill.wrapok{white-space:normal}
 @media (prefers-reduced-motion:reduce){.toast{transition:none}}
 @media (max-width:640px){.sheet-in{padding-top:max(10px,env(safe-area-inset-top,0px))}}
 #finTable td,#finTable th{padding:8px 4px}
@@ -279,6 +283,7 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
       <span>Tài khoản đang dùng mật khẩu mặc định. Hãy đổi mật khẩu để bảo vệ dữ liệu khách.</span>
       <button class="btn ghost" data-t="account">Đổi mật khẩu</button>
     </div>
+    <div id="confBox"></div>
     <div id="todayStrip"></div>
 
     <div class="panel">
@@ -410,17 +415,18 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
       </form>
     </div>
     <div class="panel stack" id="icalPanel">
-      <h3 style="margin:0">Lịch Airbnb và Booking</h3>
-      <p class="muted" style="margin:0">Dán địa chỉ lịch iCal (xuất) của Airbnb và Booking.com. Máy chủ đọc lại mỗi 30 phút, các ngày khách đã đặt trên nền tảng hiện trên lịch và báo trùng khi bạn đặt phòng. Địa chỉ được lưu trên máy chủ, không hiện lại ở đây.</p>
+      <h3 style="margin:0">Lịch Airbnb, Booking và Agoda</h3>
+      <p class="muted" style="margin:0">Dán địa chỉ lịch iCal (xuất) của Airbnb, Booking.com và Agoda. Máy chủ đọc lại mỗi 30 phút, các ngày khách đã đặt trên nền tảng hiện trên lịch và báo trùng khi bạn đặt phòng. Địa chỉ được lưu trên máy chủ, không hiện lại ở đây.</p>
       <form id="extForm" class="stack">
         <label class="f">Airbnb<input type="text" id="exAirbnb" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="https://www.airbnb.com.vn/calendar/ical/....ics?t=..."></label>
         <label class="f">Booking.com<input type="text" id="exBooking" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="https://admin.booking.com/hotel/hoteladmin/ical.html?t=..."></label>
+        <label class="f">Agoda<input type="text" id="exAgoda" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="https://portal.agoda.com/en-us/api/ari/icalendar?key=..."></label>
         <div id="extMsg" class="warnbox" hidden></div>
         <div class="row"><button class="btn">Lưu và cập nhật ngay</button><button class="btn ghost" type="button" id="extSync">Cập nhật ngay</button></div>
       </form>
       <div id="extStatus" class="list"></div>
       <div style="border-top:3px dashed var(--brown);padding-top:12px" class="stack">
-        <h3 style="margin:0">Lịch của Dear Sunday (gửi cho Airbnb, Booking)</h3>
+        <h3 style="margin:0">Lịch của Dear Sunday (gửi cho Airbnb, Booking, Agoda)</h3>
         <p class="muted" style="margin:0">Địa chỉ này chỉ chứa ngày bị chặn, không có thông tin khách. Ai có địa chỉ đều xem được ngày bận của phòng.</p>
         <label class="f">Địa chỉ lịch<input type="text" id="icsUrl" readonly></label>
         <div class="row"><button class="btn ghost" type="button" id="icsCopy">Sao chép</button><button class="btn ghost" type="button" id="icsRotate">Tạo lại mã lịch</button></div>
@@ -523,6 +529,7 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
 </div>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="askBox" class="askbox" role="alertdialog" aria-live="assertive" hidden></div>
 
 <script>
 /* ============ cấu hình ============ */
@@ -531,11 +538,11 @@ var CONFIG={API_URL:'https://script.google.com/macros/s/AKfycbw-eAIdCCp4bF2ndDLh
 
 var KEY='dearsunday-v2', BASE_KEY='dearsunday-base', AUTH_KEY='dearsunday-auth', URL_KEY='dearsunday-api', DEMO_KEY='dearsunday-demo', CAL_KEY='dearsunday-calmode', EXT_KEY='dearsunday-ext';
 var DAY=86400000, H=3600000;
-var MODE='local';
+var MODE='local', wiping=false;
 var A={url:'',token:'',user:'',role:''};
 
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
-function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function lsSet(k,v){if(wiping)return;try{localStorage.setItem(k,v)}catch(e){}}
 function lsDel(k){try{localStorage.removeItem(k)}catch(e){}}
 var $=function(s){return document.querySelector(s)};
 var uid=function(){return 'x'+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3)};
@@ -577,11 +584,25 @@ var GOI=[
   {id:'h4eve',ten:'4H buổi tối',kieu:'linhhoat',dai:240,tu:'15:30',den:'18:00',don:60,mau:'#7bbf74',hinh:'clock',moTa:'4 tiếng linh hoạt, xong sau 19:00',khung:'Bắt đầu 15:30 đến 18:00'}
 ];
 var GOI_BY={};GOI.forEach(function(g){GOI_BY[g.id]=g});
-/* lịch đặt từ Airbnb, Booking: coi như "gói" riêng chỉ để hiển thị, không đưa vào danh sách chọn gói */
-var EXT_SRC={airbnb:{id:'ext_airbnb',ten:'Airbnb',kieu:'dem',don:90,mau:'#ff8fa3',vao:'14:00',ra:'11:00'},booking:{id:'ext_booking',ten:'Booking.com',kieu:'dem',don:90,mau:'#8fb6ff',vao:'14:00',ra:'11:00'}};
+/* lịch đặt từ Airbnb, Booking, Agoda: coi như "gói" riêng chỉ để hiển thị, không đưa vào danh sách chọn gói */
+var EXT_SRC={airbnb:{id:'ext_airbnb',ten:'Airbnb',kieu:'dem',don:90,mau:'#ff8fa3',vao:'14:00',ra:'11:00'},booking:{id:'ext_booking',ten:'Booking.com',kieu:'dem',don:90,mau:'#8fb6ff',vao:'14:00',ra:'11:00'},agoda:{id:'ext_agoda',ten:'Agoda',kieu:'dem',don:90,mau:'#c3a6ff',vao:'14:00',ra:'11:00'}};
 Object.keys(EXT_SRC).forEach(function(k){GOI_BY[EXT_SRC[k].id]=EXT_SRC[k]});
-var EXT={at:0,events:[]}, TT=false;
-try{var _x=JSON.parse(lsGet(EXT_KEY)||'null');if(_x&&Array.isArray(_x.events))EXT=_x}catch(e){}
+/* nền tảng lạ (máy chủ mới hơn trang này): dùng tên chung "Nền tảng" thay vì báo lỗi */
+var EXT_OTHER={id:'ext_other',ten:'Nền tảng',kieu:'dem',don:90,mau:'#d9c9a8',vao:'14:00',ra:'11:00'};
+GOI_BY[EXT_OTHER.id]=EXT_OTHER;
+function srcOf(k){return Object.prototype.hasOwnProperty.call(EXT_SRC,k)?EXT_SRC[k]:EXT_OTHER}
+/* bỏ các sự kiện hỏng (thiếu ngày, sai định dạng) để một dòng dữ liệu xấu không làm vỡ cả trang */
+function cleanExt(list){
+  if(!Array.isArray(list))return[];
+  return list.filter(function(x){return x&&typeof x==='object'&&typeof x.src==='string'&&validDate(x.s)&&validDate(x.e)&&x.e>=x.s});
+}
+var EXT={at:0,events:[],conflicts:null,dupes:null}, TT=false;
+/* báo trùng do máy chủ tính; máy chủ cũ không có khóa này thì conflicts=null và không hiện gì */
+function cleanConf(list){
+  if(!Array.isArray(list))return null;
+  return list.filter(function(c){return c&&typeof c==='object'&&validDate(c.s)&&validDate(c.e)&&Array.isArray(c.src)}).slice(0,20);
+}
+try{var _x=JSON.parse(lsGet(EXT_KEY)||'null');if(_x&&Array.isArray(_x.events))EXT={at:+_x.at||0,events:cleanExt(_x.events),conflicts:cleanConf(_x.conflicts),dupes:cleanConf(_x.dupes)}}catch(e){}
 function GP(id){return (S&&S.prices&&S.prices[id])||{gia:0,ghi:''}}
 function gioBatDau(g){var out=[],m=tomin(g.tu),e=tomin(g.den);for(;m<=e;m+=30)out.push(pad2(Math.floor(m/60))+':'+pad2(m%60));return out}
 
@@ -664,7 +685,7 @@ var S=null;
 try{S=JSON.parse(lsGet(KEY)||'null')}catch(e){S=null}
 if(!S||!S.plants)S=seed();
 normalize(S);
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function persist(){if(wiping)return;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function save(){delete S._seed;persist();if(MODE==='cloud')markDirty()}
 
 var ST={PENDING:['Chờ kiểm tra','mute'],VERIFIED:['Đã xác minh','good'],FLAGGED:['Cảnh báo','bad']};
@@ -675,7 +696,7 @@ function drop(list,id){return list.filter(function(x){return x.id!==id})}
 
 /* ============ lịch đặt phòng: logic ============
    Mỗi đặt phòng chiếm [bắt đầu, kết thúc + thời gian dọn của gói]. Hai đặt phòng trùng khi các khoảng này chồng nhau. */
-function extB(){return EXT.events.map(function(x){return{id:'ext:'+x.src+':'+x.s+':'+x.e,ext:true,code:x.code,codeFrom:x.codeFrom,codeTo:x.codeTo,name:'Khách đặt trên '+EXT_SRC[x.src].ten,phone:'',note:'',pkg:EXT_SRC[x.src].id,nights:Math.max(1,diffDays(x.s,x.e)),startAt:x.s+'T14:00',endAt:x.e+'T11:00'}})}
+function extB(){return cleanExt(EXT.events).map(function(x){return{id:'ext:'+x.src+':'+x.s+':'+x.e,ext:true,code:x.code,codeFrom:x.codeFrom,codeTo:x.codeTo,name:'Khách đặt trên '+srcOf(x.src).ten,phone:'',note:'',pkg:srcOf(x.src).id,nights:Math.max(1,diffDays(x.s,x.e)),startAt:x.s+'T14:00',endAt:x.e+'T11:00'}})}
 function allB(){return S.bookings.concat(extB())}
 function occOf(b){var g=GOI_BY[b.pkg]||GOI_BY.sunday;return{s:tmin(b.startAt),e:tmin(b.endAt),c:g.don}}
 function dungDo(a,b){return a.s<b.e+b.c&&b.s<a.e+a.c}
@@ -732,6 +753,18 @@ function chipGoi(b){var g=GOI_BY[b.pkg];return '<span class="pill" style="backgr
 /* ============ trang chủ ============ */
 var calMode=lsGet(CAL_KEY)==='week'?'week':'month', calCur=today(), selDay=null, editId=null, armDel=null, showDone=false;
 
+var CONF_NAME={app:'App',airbnb:'Airbnb',booking:'Booking',agoda:'Agoda'};
+function renderConf(){
+  var box=$('#confBox');if(!box)return;
+  var t=today(),l=(EXT.conflicts||[]).filter(function(c){return c.e>t});
+  box.innerHTML=l.map(function(c){
+    var dd=fd(c.s)+' → '+fd(c.e);
+    return '<div class="warnbox" role="alert" style="margin-bottom:10px">Trùng lịch: '+esc(dd)+' — '+c.src.map(function(n){return esc(CONF_NAME[n]||'Nền tảng')}).join(', ')+'</div>';
+  }).join('')+(EXT.dupes||[]).filter(function(c){return c.e>t}).map(function(c){
+    var n=c.src.filter(function(k){return k!=='app'}).map(function(k){return esc(CONF_NAME[k]||'nền tảng')}).join(', ');
+    return '<div class="dupnote" role="note">'+esc(fd(c.s)+' → '+fd(c.e))+': Đơn trong app trùng đúng ngày đơn '+n+': nếu cùng một khách thì bỏ qua</div>';
+  }).join('');
+}
 function renderToday(){
   var n=nowMin(),cur=null,cl=null;
   allB().forEach(function(b){var o=occOf(b);if(o.s<=n&&n<o.e)cur=b;else if(o.e<=n&&n<o.e+o.c)cl=b});
@@ -772,11 +805,11 @@ function todoRow(x){
     else if(x.due===t)tag='<span class="pill warn">Hôm nay</span>';
     else tag='<span class="pill mute">'+fd(x.due)+'</span>';
   }
-  return '<div class="todo'+(x.done?' done':'')+'"><label><input type="checkbox" data-todo="'+x.id+'"'+(x.done?' checked':'')+'><span class="tt">'+esc(x.text)+'</span></label>'+(x.done?'':tag)+'<button class="btn x" data-act="deltodo" data-id="'+x.id+'" aria-label="Xóa việc">×</button></div>';
+  return '<div class="todo'+(x.done?' done':'')+'"><label><input type="checkbox" data-todo="'+esc(x.id)+'"'+(x.done?' checked':'')+'><span class="tt">'+esc(x.text)+'</span></label>'+(x.done?'':tag)+'<button class="btn x" data-act="deltodo" data-id="'+esc(x.id)+'" aria-label="Xóa việc">×</button></div>';
 }
 function autoRow(r){
   var b='';
-  if(r.act)b='<button class="btn ghost" data-act="'+r.act+'"'+(r.id?' data-id="'+r.id+'"':'')+'>'+r.btn+'</button>';
+  if(r.act)b='<button class="btn ghost" data-act="'+r.act+'"'+(r.id?' data-id="'+esc(r.id)+'"':'')+'>'+r.btn+'</button>';
   else if(r.go)b='<button class="btn ghost" data-go="'+r.go+'"'+(r.goview?' data-goview="'+r.goview+'"':'')+'>'+r.btn+'</button>';
   else if(r.day)b='<button class="btn ghost" data-goday="'+r.day+'">Xem lịch</button>';
   return '<div class="todo auto"><span class="tt'+(r.bad?' badtxt':'')+'">'+esc(r.txt)+'</span><span class="pill mute">Tự nhắc</span>'+b+'</div>';
@@ -826,7 +859,7 @@ function weekRow(d,t){
 }
 function renderLegend(){
   $('#calLegend').innerHTML='<span><i class="sw f"></i>Trống</span><span><i class="sw p"></i>Còn chỗ</span><span><i class="sw k"></i>Kín</span><span><i class="sw c"></i>Trùng lịch</span>'+
-    GOI.concat(Object.keys(EXT_SRC).filter(function(k){return EXT.events.some(function(x){return x.src===k})}).map(function(k){return EXT_SRC[k]})).map(function(g){return '<span><i class="dot" style="background:'+g.mau+'"></i>'+esc(g.ten)+'</span>'}).join('');
+    GOI.concat(Object.keys(EXT_SRC).filter(function(k){return EXT.events.some(function(x){return x.src===k})}).map(function(k){return EXT_SRC[k]}),EXT.events.some(function(x){return !EXT_SRC[x.src]})?[EXT_OTHER]:[]).map(function(g){return '<span><i class="dot" style="background:'+g.mau+'"></i>'+esc(g.ten)+'</span>'}).join('');
 }
 function renderCal(){
   $('#calModeM').setAttribute('aria-pressed',calMode==='month');
@@ -857,12 +890,12 @@ function bookingRow(b){
   return '<div class="res bk" style="border-left-color:'+g.mau+'"><div class="bar"><div>'+chipGoi(b)+' <b>'+esc(b.name)+'</b></div>'+(cl?'<span class="pill bad">Trùng lịch</span>':'')+'</div>'+
     '<div>'+WD[dow(dateOf(b.startAt))]+' '+fdy(dateOf(b.startAt))+' · '+khoang(b)+(g.kieu==='dem'?' · '+n+' đêm':'')+'</div>'+
     payRow(b)+codeRow(b)+(b.phone?'<div>'+esc(b.phone)+'</div>':'')+(b.note?'<div>'+esc(b.note)+'</div>':'')+
-    '<div class="bar" style="justify-content:flex-start">'+payBtns(b)+codeBtns(b)+'<button class="btn ghost" data-bkedit="'+b.id+'">Sửa</button><button class="btn ghost'+(arm?' danger':'')+'" data-bkdel="'+b.id+'">'+(arm?'Bấm lại để xóa':'Xóa')+'</button></div></div>';
+    '<div class="bar" style="justify-content:flex-start">'+payBtns(b)+codeBtns(b)+'<button class="btn ghost" data-bkedit="'+esc(b.id)+'">Sửa</button><button class="btn ghost'+(arm?' danger':'')+'" data-bkdel="'+esc(b.id)+'">'+(arm?'Bấm lại để xóa':'Xóa')+'</button></div></div>';
 }
 function availHtml(d){
   return '<div class="avail">'+GOI.map(function(g){
     var s=trangThaiGoi(g.id,d);
-    return '<button type="button" class="avbtn'+(s.ok?'':' no')+'" data-newpkg="'+g.id+'" data-d="'+d+'"><span class="ic" style="width:44px;height:44px;display:grid;place-items:center">'+HINH[g.hinh].replace('<svg ','<svg width="40" height="40" ')+'</span><span><b>'+esc(g.ten)+'</b>'+esc(g.khung)+(s.ok?'':'<br>Trùng: '+esc(s.by.map(function(x){return x.name}).join(', ')))+'</span><span class="pill '+(s.ok?'good':'bad')+'">'+(s.ok?'Còn trống':'Trùng lịch')+'</span></button>';
+    return '<button type="button" class="avbtn'+(s.ok?'':' no')+'" data-newpkg="'+esc(g.id)+'" data-d="'+d+'"><span class="ic" style="width:44px;height:44px;display:grid;place-items:center">'+HINH[g.hinh].replace('<svg ','<svg width="40" height="40" ')+'</span><span><b>'+esc(g.ten)+'</b>'+esc(g.khung)+(s.ok?'':'<br>Trùng: '+esc(s.by.map(function(x){return x.name}).join(', ')))+'</span><span class="pill '+(s.ok?'good':'bad')+'">'+(s.ok?'Còn trống':'Trùng lịch')+'</span></button>';
   }).join('')+'</div>';
 }
 function renderDetail(){
@@ -881,12 +914,12 @@ function renderUpcoming(){
   $('#upList').innerHTML=list.length?list.map(bookingRow).join(''):'<div class="empty">Chưa có đặt phòng sắp tới. Bấm "+ Đặt phòng" để thêm.</div>';
 }
 function renderHome(){
-  renderToday();renderTodos();renderCal();renderUpcoming();
+  renderConf();renderToday();renderTodos();renderCal();renderUpcoming();
   $('#guestNames').innerHTML=S.guests.map(function(g){return '<option value="'+esc(g.name)+'"></option>'}).join('');
 }
 
 /* ============ cửa sổ đặt phòng ============ */
-var F={date:'',pkg:null,nights:1,start:'',cvao:'',cra:'',le:0,touched:false,pay:'none'};
+var F={date:'',pkg:null,nights:1,start:'',cvao:'',cra:'',le:0,touched:false,pay:'none',payInit:'none'};
 function quickDates(){
   var t=today(),sat=addDays(t,(6-dow(t)+7)%7||7);
   return [['Hôm nay',t],['Ngày mai',addDays(t,1)],['Thứ bảy',sat],['Chủ nhật',addDays(sat,1)]];
@@ -900,13 +933,14 @@ function renderDateStep(){
 function renderPkgs(){
   $('#bkPkgs').innerHTML=GOI.map(function(g){
     var s=validDate(F.date)?trangThaiGoi(g.id,F.date,{nights:g.id===F.pkg?F.nights:1},editId):{ok:true,by:[]};
-    return '<button type="button" class="opt" data-pkg="'+g.id+'" aria-pressed="'+(F.pkg===g.id)+'"><span class="ic">'+HINH[g.hinh]+'</span><span><b>'+esc(g.ten)+'</b>'+esc(g.khung)+'<span class="st"><span class="pill '+(s.ok?'good':'bad')+'">'+(s.ok?'Còn trống':'Trùng lịch')+'</span>'+(s.ok?'':'<span>'+esc(s.by.map(function(x){return x.name}).join(', '))+'</span>')+'</span></span></button>';
+    return '<button type="button" class="opt" data-pkg="'+esc(g.id)+'" aria-pressed="'+(F.pkg===g.id)+'"><span class="ic">'+HINH[g.hinh]+'</span><span><b>'+esc(g.ten)+'</b>'+esc(g.khung)+'<span class="st"><span class="pill '+(s.ok?'good':'bad')+'">'+(s.ok?'Còn trống':'Trùng lịch')+'</span>'+(s.ok?'':'<span>'+esc(s.by.map(function(x){return x.name}).join(', '))+'</span>')+'</span></span></button>';
   }).join('');
 }
 function renderTimeStep(){
   var box=$('#bkTime');
   if(!F.pkg){box.innerHTML='<p class="muted">Chọn gói ở bước 2 để xem khung giờ.</p>';return}
   var g=GOI_BY[F.pkg],c=formCand(),h='';
+  if(!c){box.innerHTML='<p class="muted">Chọn ngày ở bước 1 để xem khung giờ.</p>';return}
   if(g.kieu==='linhhoat'){
     h='<p>Chọn giờ bắt đầu. Ở đủ 4 tiếng, xong lúc <b>'+(F.start?hhmm(c.endAt):'...')+'</b>.</p><div class="chips">'+
       gioBatDau(g).map(function(st){
@@ -923,7 +957,7 @@ function renderTimeStep(){
 }
 function renderSummary(){
   var c=formCand(),btn=$('#bkSave'),w=$('#bkWarn'),msg='',bad=false,cl=[];
-  if(!c){$('#bkSummary').textContent=validDate(F.date)?'Chọn gói để tiếp tục':'Chọn ngày và gói để tiếp tục';w.hidden=true;btn.disabled=true;btn.textContent='Lưu đặt phòng';btn.classList.remove('danger');return}
+  if(!c){$('#bkSummary').textContent=validDate(F.date)?'Chọn gói để tiếp tục':'Chọn ngày và gói để tiếp tục';w.hidden=validDate(F.date);if(!validDate(F.date))w.textContent='Chọn ngày';btn.disabled=true;btn.textContent='Lưu đặt phòng';btn.classList.remove('danger');return}
   var g=GOI_BY[F.pkg];
   if(g.kieu==='linhhoat'&&!F.start){$('#bkSummary').textContent=g.ten+' · chọn giờ bắt đầu ở bước 3';w.hidden=true;btn.disabled=true;btn.textContent='Lưu đặt phòng';btn.classList.remove('danger');return}
   if(tmin(c.endAt)<=tmin(c.startAt)){msg='Giờ trả phòng phải sau giờ nhận phòng.';bad=true}
@@ -948,19 +982,37 @@ function renderPrice(){
 }
 function renderCodeRow(){var b=editId&&find(S.bookings,editId);$('#bkCodeRow').hidden=!(TT&&MODE==='cloud')||!!(b&&b.code)}
 function renderForm(){renderCodeRow();renderDateStep();renderPkgs();renderTimeStep();renderPrice();renderSummary()}
-$('#bkLe').addEventListener('change',function(){F.le=+$('#bkLe').value;renderPrice()});
-$('#bkPrice').addEventListener('input',function(){F.touched=$('#bkPrice').value!=='';renderPrice()});
-function payHint(){var pr=+$('#bkPrice').value||0;return F.pay==='deposit'?'Sẽ ghi thu tạm ứng '+money(Math.round(pr/2)):F.pay==='full'?'Sẽ ghi thu '+money(pr):''}
+$('#bkLe').addEventListener('change',function(){F.le=+$('#bkLe').value;refillIfEmpty();renderPrice()});
+// Người dùng đã gõ vào ô giá (kể cả xóa trắng) thì không tự điền lại; chỉ điền lại khi đổi gói, ngày, số đêm, phụ thu lễ.
+$('#bkPrice').addEventListener('input',function(){F.touched=true;renderPrice()});
+function refillIfEmpty(){if($('#bkPrice').value==='')F.touched=false}
+function payHint(){
+  var pr=Math.round(+$('#bkPrice').value||0),b=editId&&find(S.bookings,editId);
+  if(!b)return F.pay==='deposit'?'Sẽ ghi thu tạm ứng '+money(Math.round(pr/2)):F.pay==='full'?'Sẽ ghi thu '+money(pr):'';
+  // Đang sửa đặt phòng đã có: chỉ ghi tiền khi bạn đổi lựa chọn thu tiền ở trên; sửa giá thì chỉ nhắc.
+  var a=b.paidAmt||0;
+  if(F.pay!==F.payInit){
+    var d=(F.pay==='full'?pr:F.pay==='deposit'?Math.round(pr/2):0)-a;
+    return d>0?'Sẽ ghi thu '+money(d):d<0?'Sẽ ghi hoàn '+money(-d):'';
+  }
+  return payGap(a,pr)||'Sửa giá không tự ghi thu hay hoàn tiền.';
+}
+/* nhắc chênh lệch giữa số đã thu và giá; không đụng giao dịch. Tạm ứng 50% là bình thường nên không nhắc. */
+function payGap(a,pr){
+  if(!(a>0)||a===pr||(pr>0&&a===Math.round(pr/2)))return '';
+  if(!(pr>0))return 'Đã thu '+money(a)+' / chưa có giá';
+  return 'Đã thu '+money(a)+' / giá '+money(pr)+' — '+(pr>a?'còn thiếu '+money(pr-a):'dư '+money(a-pr));
+}
 function openForm(b,day,pkg){
   editId=b?b.id:null;
   $('#bkTitle').textContent=b?'Sửa đặt phòng':'Đặt phòng mới';
   if(b){
     var g=GOI_BY[b.pkg];
-    F={date:dateOf(b.startAt),pkg:b.pkg,nights:Math.max(1,diffDays(dateOf(b.startAt),dateOf(b.endAt))),start:g.kieu==='linhhoat'?hhmm(b.startAt):'',cvao:'',cra:'',le:b.le||0,touched:b.price!=null,pay:payState(b)};
+    F={date:dateOf(b.startAt),pkg:b.pkg,nights:Math.max(1,diffDays(dateOf(b.startAt),dateOf(b.endAt))),start:g.kieu==='linhhoat'?hhmm(b.startAt):'',cvao:'',cra:'',le:b.le||0,touched:b.price!=null,pay:payState(b),payInit:payState(b)};
     if(g.kieu!=='linhhoat'){if(hhmm(b.startAt)!==g.vao)F.cvao=hhmm(b.startAt);if(hhmm(b.endAt)!==g.ra)F.cra=hhmm(b.endAt)}
     $('#bkName').value=b.name;$('#bkPhone').value=b.phone||'';$('#bkNote').value=b.note||'';$('#bkPrice').value=b.price!=null?b.price:'';
   }else{
-    F={date:day||today(),pkg:pkg||null,nights:1,start:'',cvao:'',cra:'',le:0,touched:false,pay:'none'};
+    F={date:day||today(),pkg:pkg||null,nights:1,start:'',cvao:'',cra:'',le:0,touched:false,pay:'none',payInit:'none'};
     $('#bkName').value='';$('#bkPhone').value='';$('#bkNote').value='';$('#bkPrice').value='';
   }
   $('#bkCode').checked=!b;
@@ -968,8 +1020,12 @@ function openForm(b,day,pkg){
   renderForm();
 }
 function closeForm(){$('#bookPanel').hidden=true;document.body.classList.remove('noscroll');editId=null}
-function setDate(d){if(!validDate(d))return;F.date=d;if(F.pkg&&GOI_BY[F.pkg].kieu==='linhhoat'&&F.start&&!gioBatDau(GOI_BY[F.pkg]).includes(F.start))F.start='';renderForm()}
-$('#bkDate').addEventListener('change',function(){setDate($('#bkDate').value)});
+function setDate(d){if(!validDate(d))return;refillIfEmpty();F.date=d;if(F.pkg&&GOI_BY[F.pkg].kieu==='linhhoat'&&F.start&&!gioBatDau(GOI_BY[F.pkg]).includes(F.start))F.start='';renderForm()}
+$('#bkDate').addEventListener('change',function(){
+  var v=$('#bkDate').value;
+  if(validDate(v))setDate(v);
+  else{F.date='';F.start='';renderForm()} // xóa trống ngày: không giữ ngày cũ ngầm, không cho lưu
+});
 $('#bkName').addEventListener('change',function(){
   if($('#bkPhone').value.trim())return;
   var n=$('#bkName').value.trim().toLowerCase();
@@ -981,24 +1037,34 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('#bookPa
 $('#bkForm').addEventListener('submit',function(e){
   e.preventDefault();
   var c=formCand(),name=$('#bkName').value.trim(),w=$('#bkWarn');
+  if(!validDate(F.date)){w.hidden=false;w.textContent='Chọn ngày';$('#bkDate').focus();return}
   if(!c||(GOI_BY[F.pkg].kieu==='linhhoat'&&!F.start)){renderSummary();return}
   if(!name){w.hidden=false;w.textContent='Vui lòng nhập tên khách.';$('#bkName').focus();return}
   if(tmin(c.endAt)<=tmin(c.startAt)){renderSummary();return}
   var price=$('#bkPrice').value===''?0:Math.round(+$('#bkPrice').value);
   if(F.pay!=='none'&&!price){w.hidden=false;w.textContent='Nhập giá trước khi ghi thu tạm ứng hoặc thanh toán đủ.';$('#bkPrice').focus();return}
   var rec={name:name,phone:$('#bkPhone').value.trim(),note:$('#bkNote').value.trim(),pkg:c.pkg,nights:F.nights,startAt:c.startAt,endAt:c.endAt,le:F.le,price:$('#bkPrice').value===''?null:Math.max(0,Math.round(+$('#bkPrice').value))};
-  var bk;
-  if(editId){bk=find(S.bookings,editId);if(bk)Object.assign(bk,rec)}
+  var bk,timesChanged=false,wasEdit=!!editId;
+  if(editId){bk=find(S.bookings,editId);if(bk){timesChanged=bk.startAt!==rec.startAt||bk.endAt!==rec.endAt;Object.assign(bk,rec)}}
   else{bk=Object.assign({id:uid(),paidAmt:0},rec);S.bookings.push(bk)}
-  if(bk)applyPay(bk,F.pay);
+  // Đặt phòng mới: ghi thu theo lựa chọn. Sửa đặt phòng: chỉ ghi khi bạn chủ động đổi lựa chọn thu tiền, sửa giá thì không tự sinh giao dịch.
+  if(bk&&(!wasEdit||F.pay!==F.payInit))applyPay(bk,F.pay);
   calCur=F.date;selDay=F.date;
   var wantCode=TT&&MODE==='cloud'&&!$('#bkCodeRow').hidden&&$('#bkCode').checked&&bk&&!bk.code;
+  var staleCode=wasEdit&&timesChanged&&bk&&codeOff(bk);
   closeForm();save();renderAll();bao('Đã lưu đặt phòng');
   if(wantCode)makeCode(bk.id,null);
+  else if(staleCode)askNewCode(bk);
   $('#calPanel').scrollIntoView({behavior:'smooth',block:'start'});
 });
 
 /* ============ các tab còn lại ============ */
+/* "x phút/giờ/ngày trước": dưới 1 giờ tính phút, dưới 24 giờ tính giờ, còn lại tính ngày */
+function ago(t){
+  if(!t)return 'chưa lần nào';
+  var m=Math.max(0,Math.floor((Date.now()-t)/60000));
+  return m<1?'vừa xong':m<60?m+' phút trước':m<1440?Math.floor(m/60)+' giờ trước':Math.floor(m/1440)+' ngày trước';
+}
 function span(ms){var h=Math.round(Math.abs(ms)/H);return h>=48?Math.round(h/24)+' ngày':h+' giờ'}
 function plantDue(p){return !S.water||S.water+p.days*DAY<=Date.now()}
 function plantText(p){
@@ -1006,7 +1072,6 @@ function plantText(p){
   var d=S.water+p.days*DAY-Date.now();
   return d<=0?'Cần tưới, quá '+span(d):'Còn '+span(d);
 }
-function ago(t){if(!t)return 'Chưa có';var d=Date.now()-t;return d<H?'Vừa xong':span(d)+' trước'}
 
 function renderPlants(){
   $('#plantsView').innerHTML='<div class="panel bar"><div><h3 style="margin:0">Tưới cây</h3><span class="muted">Lần tưới gần nhất: '+ago(S.water)+(S.water?' ('+dt(S.water)+')':'')+'</span></div>'+
@@ -1014,8 +1079,8 @@ function renderPlants(){
     '<div class="panel"><div class="list">'+(S.plants.length?S.plants.map(function(p){
       return '<div class="li"><span class="name">'+esc(p.name)+'</span>'+
        '<span class="pill '+(plantDue(p)?'bad':'good')+'">'+plantText(p)+'</span>'+
-       '<select data-days="'+p.id+'" aria-label="Lịch tưới '+esc(p.name)+'"><option value="1"'+(p.days===1?' selected':'')+'>Mỗi ngày</option><option value="2"'+(p.days===2?' selected':'')+'>2 ngày 1 lần</option></select>'+
-       '<button class="btn x" data-act="delplant" data-id="'+p.id+'" aria-label="Xóa '+esc(p.name)+'">×</button></div>'}).join(''):'<div class="empty">Chưa có cây nào.</div>')+'</div></div>'+
+       '<select data-days="'+esc(p.id)+'" aria-label="Lịch tưới '+esc(p.name)+'"><option value="1"'+(p.days===1?' selected':'')+'>Mỗi ngày</option><option value="2"'+(p.days===2?' selected':'')+'>2 ngày 1 lần</option></select>'+
+       '<button class="btn x" data-act="delplant" data-id="'+esc(p.id)+'" aria-label="Xóa '+esc(p.name)+'">×</button></div>'}).join(''):'<div class="empty">Chưa có cây nào.</div>')+'</div></div>'+
     '<form class="panel row" id="plantForm"><label class="f" style="flex:2 1 200px">Thêm cây<input type="text" id="pName" required placeholder="Tên cây"></label>'+
     '<label class="f" style="flex:0 1 170px">Lịch tưới<select id="pDays" style="width:100%"><option value="2">2 ngày 1 lần</option><option value="1">Mỗi ngày</option></select></label><button class="btn">Thêm</button></form>';
 }
@@ -1023,9 +1088,9 @@ function renderToys(){
   $('#toysView').innerHTML='<div class="panel"><div class="list">'+(S.toys.length?S.toys.map(function(t){
     return '<div class="li'+(t.lost?' lost':'')+'"><span class="name">'+esc(t.name)+'</span>'+
      (t.lost?'<span class="pill bad">Mất</span>':'<span class="pill '+(t.empty?'warn':'good')+'">'+(t.empty?'Hết':'Đủ')+'</span>')+
-     '<button class="btn ghost" data-act="'+(t.empty?'fill':'empty')+'" data-id="'+t.id+'"'+(t.lost?' disabled':'')+'>'+(t.empty?'Đã fill':'Báo hết')+'</button>'+
-     '<label class="chk"><input type="checkbox" data-lost="'+t.id+'"'+(t.lost?' checked':'')+'> Mất đồ</label>'+
-     '<button class="btn x" data-act="deltoy" data-id="'+t.id+'" aria-label="Xóa '+esc(t.name)+'">×</button></div>'}).join(''):'<div class="empty">Chưa có món nào.</div>')+'</div></div>'+
+     '<button class="btn ghost" data-act="'+(t.empty?'fill':'empty')+'" data-id="'+esc(t.id)+'"'+(t.lost?' disabled':'')+'>'+(t.empty?'Đã fill':'Báo hết')+'</button>'+
+     '<label class="chk"><input type="checkbox" data-lost="'+esc(t.id)+'"'+(t.lost?' checked':'')+'> Mất đồ</label>'+
+     '<button class="btn x" data-act="deltoy" data-id="'+esc(t.id)+'" aria-label="Xóa '+esc(t.name)+'">×</button></div>'}).join(''):'<div class="empty">Chưa có món nào.</div>')+'</div></div>'+
     '<form class="panel row" id="toyForm"><label class="f" style="flex:2 1 200px">Thêm đồ nhỏ<input type="text" id="oName" required placeholder="Tên đồ hoặc trò chơi"></label><button class="btn">Thêm</button></form>';
 }
 function renderClean(){
@@ -1033,49 +1098,97 @@ function renderClean(){
   $('#cleanView').innerHTML='<div class="bar"><h2>Dọn phòng</h2><span class="muted">Dọn lần cuối: '+ago(S.clean.last)+(S.clean.last?' ('+dt(S.clean.last)+')':'')+'</span></div>'+
    '<div class="panel"><div class="bar" style="margin-bottom:6px"><h3 style="margin:0">Checklist ('+done+'/'+tasks.length+')</h3><button class="btn" data-act="cleandone">Hoàn tất dọn phòng</button></div>'+
    '<div class="list">'+(tasks.length?tasks.map(function(t){
-     return '<div class="li"><label class="chk big" style="flex:1 1 200px"><input type="checkbox" data-task="'+t.id+'"'+(t.done?' checked':'')+'><span'+(t.done?' class="muted" style="text-decoration:line-through"':'')+'>'+esc(t.text)+'</span></label>'+
-      '<button class="btn x" data-act="deltask" data-id="'+t.id+'" aria-label="Xóa mục">×</button></div>'}).join(''):'<div class="empty">Chưa có mục nào.</div>')+'</div></div>'+
+     return '<div class="li"><label class="chk big" style="flex:1 1 200px"><input type="checkbox" data-task="'+esc(t.id)+'"'+(t.done?' checked':'')+'><span'+(t.done?' class="muted" style="text-decoration:line-through"':'')+'>'+esc(t.text)+'</span></label>'+
+      '<button class="btn x" data-act="deltask" data-id="'+esc(t.id)+'" aria-label="Xóa mục">×</button></div>'}).join(''):'<div class="empty">Chưa có mục nào.</div>')+'</div></div>'+
    '<form class="panel row" id="taskForm"><label class="f" style="flex:2 1 220px">Thêm mục dọn dẹp<input type="text" id="kText" required placeholder="Ví dụ: Lau tủ lạnh mini"></label><button class="btn">Thêm</button></form>';
 }
 function renderNotes(){
   var rows=S.notes.slice().sort(function(a,b){return b.at-a.at});
-  $('#noteList').innerHTML=rows.length?rows.map(function(n){return '<div class="noteitem"><div><p>'+esc(n.text)+'</p><small>'+dt(n.at)+'</small></div><button class="btn x" data-act="delnote" data-id="'+n.id+'" aria-label="Xóa ghi chú">×</button></div>'}).join(''):'<div class="empty">Chưa có ghi chú nào.</div>';
+  $('#noteList').innerHTML=rows.length?rows.map(function(n){return '<div class="noteitem"><div><p>'+esc(n.text)+'</p><small>'+dt(n.at)+'</small></div><button class="btn x" data-act="delnote" data-id="'+esc(n.id)+'" aria-label="Xóa ghi chú">×</button></div>'}).join(''):'<div class="empty">Chưa có ghi chú nào.</div>';
 }
 function renderGuests(){
   $('#guestList').innerHTML='<table><thead><tr><th>Tên</th><th>SĐT</th><th>Trạng thái</th><th></th></tr></thead><tbody>'+
-   (S.guests.map(function(g){var s=ST[g.status]||ST.PENDING;return '<tr><td><b>'+esc(g.name)+'</b></td><td>'+esc(g.phone)+'</td><td><span class="pill '+s[1]+'">'+s[0]+'</span></td><td style="text-align:right"><button class="btn ghost" data-guest="'+g.id+'">'+(openGuest===g.id?'Đang xem':'Chi tiết')+'</button></td></tr>'}).join('')||'<tr><td colspan="4" class="empty">Chưa có khách nào.</td></tr>')+'</tbody></table>';
+   (S.guests.map(function(g){var s=ST[g.status]||ST.PENDING;return '<tr><td><b>'+esc(g.name)+'</b></td><td>'+esc(g.phone)+'</td><td><span class="pill '+s[1]+'">'+s[0]+'</span></td><td style="text-align:right"><button class="btn ghost" data-guest="'+esc(g.id)+'">'+(openGuest===g.id?'Đang xem':'Chi tiết')+'</button></td></tr>'}).join('')||'<tr><td colspan="4" class="empty">Chưa có khách nào.</td></tr>')+'</tbody></table>';
   var g=S.guests.filter(function(x){return x.id===openGuest})[0], box=$('#guestDetail');
   if(!g){box.innerHTML='';return}
   var v=g.ver.slice().reverse().map(function(x){var r=RK[x.risk];return '<div class="res"><div class="bar"><span class="pill '+r[1]+'">'+r[0]+'</span><span class="muted">'+dt(x.at)+'</span></div><div>'+esc(x.sum)+'</div></div>'}).join('')||'<div class="empty">Chưa có lần kiểm tra nào.</div>';
-  var c=g.codes.slice().reverse().map(function(x){return '<div class="res"><span class="code">'+esc(x.code)+'</span><span class="muted">Khóa '+esc(x.lock)+' · '+dt(x.from)+' đến '+dt(x.to)+'</span></div>'}).join('')||'<div class="empty">Chưa có mã khóa nào.</div>';
   box.innerHTML='<div class="split"><div class="panel"><h3>Kiểm tra thông tin '+esc(g.name)+'</h3><p class="muted" style="margin:0 0 10px">Dán profile và số điện thoại để phát hiện dấu hiệu giả mạo, clone hoặc lừa đảo.</p>'+
    '<form id="verForm" style="display:grid;gap:10px"><label class="f">Profile khách<textarea id="vProf" rows="5" required placeholder="Dán profile vào đây"></textarea></label><label class="f">Số điện thoại<input type="text" id="vPhone" value="'+esc(g.phone)+'" required></label><button class="btn">Kiểm tra ngay</button></form>'+v+'</div>'+
-   '<div class="panel"><h3>Tạo mã khóa thông minh</h3><form id="codeForm" style="display:grid;gap:10px"><label class="f">ID thiết bị khóa<input type="text" id="cLock" required value="lock-sunday-01"></label><label class="f">Email khách<input type="email" id="cMail" placeholder="khach@example.com"></label><label class="f">Hiệu lực từ<input type="datetime-local" id="cFrom" required></label><label class="f">Đến<input type="datetime-local" id="cTo" required></label><button class="btn">Tạo mã và gửi email</button></form>'+c+(lastMail[g.id]?'<div class="mail">'+esc(lastMail[g.id])+'</div>':'')+'</div></div>';
-  var pad=function(d){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)};
-  $('#cFrom').value=pad(new Date());$('#cTo').value=pad(new Date(Date.now()+2*DAY));
+   guestCodePanel(g)+'</div>';
+}
+/* đặt phòng đang ở hoặc sắp tới của khách (khớp tên, hoặc số điện thoại nếu có) */
+function guestBooking(g){
+  var n=nowMin(),nm=String(g.name||'').trim().toLowerCase(),ph=String(g.phone||'').replace(/\s+/g,'');
+  if(!nm&&!ph)return null;
+  var list=S.bookings.filter(function(b){
+    var same=(nm&&String(b.name||'').trim().toLowerCase()===nm)||(ph&&String(b.phone||'').replace(/\s+/g,'')===ph);
+    return same&&occOf(b).e>n;
+  }).sort(function(a,b){return tmin(a.startAt)-tmin(b.startAt)});
+  var cur=list.filter(function(b){return occOf(b).s<=n})[0];
+  return cur||list[0]||null;
+}
+// Chỉ hiện khi đã nối TTLock (giống nút ở đặt phòng). Dùng mã thật từ máy chủ, không tạo mã giả.
+function guestCodePanel(g){
+  if(!(TT&&MODE==='cloud'))return '';
+  var bk=guestBooking(g);
+  if(!bk)return '<div class="panel"><h3>Mã vào cửa</h3><p class="muted">Khách chưa có đặt phòng sắp tới — tạo mã trong đặt phòng.</p><div style="margin-top:10px"><button class="btn" data-guestcode="'+esc(g.id)+'">Tạo mã vào cửa</button></div></div>';
+  var ok=bk.code&&!codeOff(bk);
+  return '<div class="panel"><h3>Mã vào cửa</h3><div>'+chipGoi(bk)+' '+WD[dow(dateOf(bk.startAt))]+' '+fdy(dateOf(bk.startAt))+' · '+khoang(bk)+'</div>'+codeRow(bk)+
+    '<div class="bar" style="justify-content:flex-start;margin-top:10px">'+(ok?'<button class="btn ghost" data-ttmsg="'+esc(bk.id)+'">Sao chép tin nhắn mã</button>':'<button class="btn" data-guestcode="'+esc(g.id)+'">'+(bk.code?'Tạo mã mới':'Tạo mã vào cửa')+'</button>')+'</div></div>';
 }
 function payState(b){var p=b.price||0,a=b.paidAmt||0;return a<=0?'none':(p>0&&a>=p?'full':'deposit')}
 function payRow(b){
-  if(!b.price)return '';
-  var st=payState(b),a=b.paidAmt||0;
-  return '<div><b>'+money(b.price)+'</b> '+(st==='full'?'<span class="pill good">Đã thanh toán đủ</span>':st==='deposit'?'<span class="pill warn">Đã tạm ứng '+money(a)+'</span>':'<span class="pill bad">Chưa thu</span>')+'</div>';
+  var a=b.paidAmt||0,gap=payGap(a,b.price||0),note=gap?'<div><span class="pill warn wrapok">'+esc(gap)+'</span></div>':'';
+  if(!b.price)return note;
+  var st=payState(b);
+  return '<div><b>'+money(b.price)+'</b> '+(st==='full'?'<span class="pill good">Đã thanh toán đủ</span>':st==='deposit'?'<span class="pill warn">Đã tạm ứng '+money(a)+'</span>':'<span class="pill bad">Chưa thu</span>')+'</div>'+note;
+}
+/* Khung giờ mã đúng theo máy chủ: bắt đầu làm tròn xuống giờ, kết thúc + 1 giờ làm tròn lên giờ (giờ Việt Nam). */
+function codeWindow(b){
+  var s=new Date(String(b.startAt)+':00+07:00').getTime(),e=new Date(String(b.endAt)+':00+07:00').getTime();
+  if(!isFinite(s)||!isFinite(e))return null;
+  return{from:Math.floor(s/H)*H,to:Math.ceil((e+H)/H)*H};
+}
+// Mã đã có nhưng khung giờ của mã khác giờ đặt phòng hiện tại. Mã cũ không có khung giờ thì không đoán.
+function codeOff(b){
+  if(!b||!b.code||typeof b.codeFrom!=='number'||typeof b.codeTo!=='number')return false;
+  var w=codeWindow(b);
+  return !!w&&(b.codeFrom!==w.from||b.codeTo!==w.to);
 }
 function codeRow(b){
-  if(b.code)return '<div>Mã vào cửa: <b class="code">'+esc(b.code)+'</b> <span class="muted">đến '+esc(dt(b.codeTo))+'</span></div>';
+  if(b.code)return '<div>Mã vào cửa: <b class="code">'+esc(b.code)+'</b> <span class="muted">đến '+esc(dt(b.codeTo))+'</span>'+(codeOff(b)?' <span class="pill bad">Mã lệch giờ</span>':'')+'</div>';
   return '';
 }
 function codeBtns(b){
-  if(b.code)return '<button class="btn ghost" data-ttmsg="'+b.id+'">Sao chép tin nhắn mã</button>';
-  return TT?'<button class="btn ghost" data-ttcode="'+b.id+'">Tạo mã vào cửa</button>':'';
+  if(b.code)return (codeOff(b)&&TT&&!b.ext?'<button class="btn ghost" data-ttcode="'+esc(b.id)+'">Tạo mã mới</button>':'')+'<button class="btn ghost" data-ttmsg="'+esc(b.id)+'">Sao chép tin nhắn mã</button>';
+  return TT?'<button class="btn ghost" data-ttcode="'+esc(b.id)+'">Tạo mã vào cửa</button>':'';
+}
+/* hộp nhắc nổi (không tự tắt như thông báo nhỏ) */
+function notice(html,btns){
+  var box=$('#askBox');
+  box.innerHTML='<div>'+html+'</div><div class="bar">'+btns.map(function(x){return '<button type="button" class="btn'+(x.ghost?' ghost':'')+'" data-ask="'+x.k+'"'+(x.id?' data-askid="'+esc(x.id)+'"':'')+'>'+esc(x.t)+'</button>'}).join('')+'</div>';
+  box.hidden=false;
+}
+function hideNotice(){$('#askBox').hidden=true}
+function askNewCode(b){
+  if(TT&&MODE==='cloud')notice('<b>Mã cửa cũ theo giờ cũ.</b> Tạo mã mới?',[{k:'new',t:'Tạo mã mới',id:b.id},{k:'ok',t:'Để sau',ghost:1}]);
+  else notice('<b>Mã cửa cũ theo giờ cũ.</b> Hãy tạo mã mới khi đã đăng nhập và nối khóa.',[{k:'ok',t:'Đã hiểu'}]);
 }
 function makeCode(id,btn){
   if(MODE!=='cloud'){bao('Cần đăng nhập và đồng bộ để tạo mã');return}
+  var label=btn?btn.textContent:'Tạo mã vào cửa';
   if(btn){btn.disabled=true;btn.textContent='Đang tạo mã...'}
   var ex=id.indexOf('ext:')===0?id.split(':'):null;
+  var prev=ex?null:find(S.bookings,id),oldCode=prev&&prev.code?String(prev.code):'';
   (ex?Promise.resolve():(isDirty()?push():Promise.resolve())).then(function(){return ex?api('ttCodeExt',{src:ex[1],s:ex[2],e:ex[3]}):api('ttCode',{bookingId:id})}).then(function(r){
     if(!r.ok)throw new Error(r.error||'Không tạo được mã');
-    bao('Đã tạo mã '+r.code);return ex?api('load',{extSince:0}).then(takeExt):pull();
-  }).catch(function(err){if(err.auth)return handleErr(err);bao(err.message);if(btn){btn.disabled=false;btn.textContent='Tạo mã vào cửa'}});
+    // Máy chủ mới báo replaced/oldCode. Máy chủ cũ không báo: tự so với mã đang có.
+    var old=r.replaced?String(r.oldCode||oldCode):(oldCode&&String(r.code)!==oldCode?oldCode:'');
+    if(oldCode&&!old&&String(r.code)===oldCode)bao('Mã hiện tại vẫn đúng giờ: '+r.code);
+    else bao('Đã tạo mã '+r.code);
+    if(r.replaced||old)notice('Mã mới <b>'+esc(r.code)+'</b>. Mã cũ '+(old?'<b>'+esc(old)+'</b> ':'')+'vẫn mở được cửa tới hết hạn (không xóa từ xa được).',[{k:'ok',t:'Đã hiểu'}]);
+    return ex?api('load',{extSince:0}).then(takeExt):pull();
+  }).catch(function(err){if(err.auth)return handleErr(err);bao(err.message);if(btn){btn.disabled=false;btn.textContent=label}});
 }
 function copyCodeMsg(id){
   var b=id.indexOf('ext:')===0?extB().filter(function(x){return x.id===id})[0]:find(S.bookings,id);if(!b||!b.code)return;
@@ -1086,9 +1199,9 @@ function copyCodeMsg(id){
 function payBtns(b){
   if(!b.price)return '';
   var st=payState(b);
-  if(st==='full')return '';
-  if(st==='deposit')return '<button class="btn" data-pay="'+b.id+':full">Thu nốt '+money(b.price-b.paidAmt)+'</button>';
-  return '<button class="btn" data-pay="'+b.id+':deposit">Tạm ứng 50%</button><button class="btn ghost" data-pay="'+b.id+':full">Thu đủ</button>';
+  if(st==='full')return (b.paidAmt||0)>b.price?'<button class="btn ghost" data-pay="'+esc(b.id)+':full">Hoàn tiền dư '+money(b.paidAmt-b.price)+'</button>':'';
+  if(st==='deposit')return '<button class="btn" data-pay="'+esc(b.id)+':full">Thu nốt '+money(b.price-b.paidAmt)+'</button>';
+  return '<button class="btn" data-pay="'+esc(b.id)+':deposit">Tạm ứng 50%</button><button class="btn ghost" data-pay="'+esc(b.id)+':full">Thu đủ</button>';
 }
 /* đưa số tiền đã thu của đặt phòng về đúng mức; chênh lệch ghi vào Tài chính */
 function applyPay(b,mode){
@@ -1108,8 +1221,8 @@ function renderPriceTab(){
   box.innerHTML=GOI.map(function(g){var p=GP(g.id);
     return '<div class="panel" style="border-left:10px solid '+g.mau+'"><div class="bar"><h3 style="margin:0">'+esc(g.ten)+'</h3><span class="pill mute">'+esc(g.kieu==='dem'?'giá 1 đêm':'giá 1 lượt')+'</span></div>'+
       '<div class="muted">'+esc(g.khung)+' · '+esc(g.moTa)+' · dọn '+g.don+' phút</div>'+
-      '<label class="f">Giá (đ)<input type="number" min="0" step="1000" inputmode="numeric" data-pp="'+g.id+'" data-pf="gia" value="'+(p.gia||'')+'" placeholder="Chưa có giá"></label>'+
-      '<label class="f">Ghi chú nội bộ<input type="text" maxlength="200" data-pp="'+g.id+'" data-pf="ghi" value="'+esc(p.ghi||'')+'" placeholder="Ví dụ: đã gồm nước, khăn"></label></div>'}).join('');
+      '<label class="f">Giá (đ)<input type="number" min="0" step="1000" inputmode="numeric" data-pp="'+esc(g.id)+'" data-pf="gia" value="'+(p.gia||'')+'" placeholder="Chưa có giá"></label>'+
+      '<label class="f">Ghi chú nội bộ<input type="text" maxlength="200" data-pp="'+esc(g.id)+'" data-pf="ghi" value="'+esc(p.ghi||'')+'" placeholder="Ví dụ: đã gồm nước, khăn"></label></div>'}).join('');
 }
 $('#pkgCards').addEventListener('change',function(e){
   var el=e.target,id=el.dataset.pp;if(!id)return;
@@ -1187,7 +1300,7 @@ function bao(msg){var t=$('#toast');t.textContent=msg;t.classList.add('show');cl
 
 /* ============ sự kiện ============ */
 document.addEventListener('click',function(e){
-  var t=e.target.closest('[data-t],[data-go],[data-act],[data-guest],[data-view],[data-pick],[data-goday],[data-calnav],[data-calmode],[data-bkedit],[data-bkdel],[data-newbk],[data-newpkg],[data-uact],[data-qd],[data-dstep],[data-pkg],[data-nights],[data-flex],[data-resettime],[data-reprice],[data-ttcode],[data-ttmsg],[data-fm],[data-pay],[data-fpay],[data-fin],[data-finnav]');
+  var t=e.target.closest('[data-t],[data-go],[data-act],[data-guest],[data-view],[data-pick],[data-goday],[data-calnav],[data-calmode],[data-bkedit],[data-bkdel],[data-newbk],[data-newpkg],[data-uact],[data-qd],[data-dstep],[data-pkg],[data-nights],[data-flex],[data-resettime],[data-reprice],[data-ttcode],[data-ttmsg],[data-guestcode],[data-ask],[data-fm],[data-pay],[data-fpay],[data-fin],[data-finnav]');
   if(!t)return;
   var d=t.dataset, id=d.id;
   if(d.t){show(d.t);return}
@@ -1197,11 +1310,17 @@ document.addEventListener('click',function(e){
   if(d.uact){userAction(d);return}
   if(d.qd){setDate(d.qd);return}
   if(d.dstep){setDate(addDays(validDate(F.date)?F.date:today(),+d.dstep));return}
-  if(d.pkg){F.pkg=d.pkg;F.nights=1;F.start='';F.cvao='';F.cra='';renderForm();return}
-  if(d.nights){F.nights=Math.min(30,Math.max(1,F.nights+ +d.nights));renderForm();return}
+  if(d.pkg){refillIfEmpty();F.pkg=d.pkg;F.nights=1;F.start='';F.cvao='';F.cra='';renderForm();return}
+  if(d.nights){refillIfEmpty();F.nights=Math.min(30,Math.max(1,F.nights+ +d.nights));renderForm();return}
   if(d.flex){F.start=d.flex;renderForm();return}
   if(d.reprice){F.touched=false;renderPrice();return}
   if(d.ttcode){makeCode(d.ttcode,t);return}
+  if(d.guestcode){
+    var gg=find(S.guests,d.guestcode),gb=gg&&guestBooking(gg);
+    if(!gb){bao('Khách chưa có đặt phòng sắp tới — tạo mã trong đặt phòng');return}
+    makeCode(gb.id,t);return;
+  }
+  if(d.ask){var aid=d.askid;hideNotice();if(d.ask==='new'&&aid)makeCode(aid,null);return}
   if(d.ttmsg){copyCodeMsg(d.ttmsg);return}
   if(d.fpay){F.pay=d.fpay;renderPrice();return}
   if(d.pay){var pp=d.pay.split(':');applyPay(find(S.bookings,pp[0]),pp[1]);save();renderAll();return}
@@ -1291,11 +1410,6 @@ $('#guestDetail').addEventListener('submit',function(e){
   if(e.target.id==='verForm'){
     var r=verify($('#vProf').value,$('#vPhone').value);
     g.phone=$('#vPhone').value.trim();g.ver.push(r);g.status=r.risk==='HIGH'?'FLAGGED':'VERIFIED';
-  }else if(e.target.id==='codeForm'){
-    var code=String(Math.floor(100000+Math.random()*900000)),from=new Date($('#cFrom').value).getTime(),to=new Date($('#cTo').value).getTime();
-    g.codes.push({code:code,lock:$('#cLock').value.trim(),from:from,to:to});
-    var mail=$('#cMail').value.trim();
-    lastMail[g.id]=mail?('Đã gửi tới '+mail+' (giả lập)\nTiêu đề: Mã khóa cửa homestay của bạn\n\nXin chào '+g.name+',\nMã khóa cửa của bạn là: '+code+'\nHiệu lực từ '+dt(from)+' đến '+dt(to)+'.\nVui lòng không chia sẻ mã này cho người khác.\n\nDearSunday Homestay'):'';
   }
   save();renderAll();
 });
@@ -1433,8 +1547,8 @@ function initialSync(){
 function takeExt(res){
   if(res&&res.tt!==undefined&&!!res.tt!==TT){TT=!!res.tt;renderAll()}
   if(!res||res.ext===undefined)return;
-  EXT={at:res.extAt||0,events:res.ext||[]};
-  try{localStorage.setItem(EXT_KEY,JSON.stringify(EXT))}catch(e){}
+  EXT={at:res.extAt||0,events:cleanExt(res.ext),conflicts:cleanConf(res.extConflicts),dupes:cleanConf(res.extDupes)};
+  if(!wiping){try{localStorage.setItem(EXT_KEY,JSON.stringify(EXT))}catch(e){}}
   renderAll();
 }
 function startTimers(){
@@ -1528,20 +1642,43 @@ function startLocal(){
   enterApp();
 }
 function forceLogout(msg){lsDel(AUTH_KEY);A={url:A.url,token:'',user:'',role:''};showAuth(msg)}
-var logoutArmed=false;
-$('#logoutBtn').addEventListener('click',function(){
-  var finish=function(){[KEY,BASE_KEY,AUTH_KEY].forEach(lsDel);location.reload()};
+/* Đăng xuất: đồng bộ nốt thay đổi chưa lưu; nếu không được thì hỏi lại. Sau đó gỡ thông báo đẩy và xóa MỌI khóa dearsunday* (gồm mã cửa, token, tài khoản).
+   forceLogout (hết phiên) khác: giữ nguyên dữ liệu chưa đồng bộ để đăng nhập lại không mất. */
+var loggingOut=false;
+function waitMs(ms){return new Promise(function(r){setTimeout(r,ms)})}
+function flushBeforeLogout(){
+  var t0=Date.now();
   clearTimeout(Sy.timer);
-  if(MODE==='cloud'&&isDirty()&&!logoutArmed){
-    $('#logoutBtn').disabled=true;
-    push().then(function(){
-      $('#logoutBtn').disabled=false;
-      if(isDirty()){logoutArmed=true;$('#logoutBtn').textContent='Chưa đồng bộ xong. Bấm lại để thoát và bỏ thay đổi'}
-      else finish();
-    });
-    return;
+  function step(){
+    if(Sy.busy&&Date.now()-t0<10000)return waitMs(250).then(step);
+    if(!isDirty())return Promise.resolve();
+    if(Date.now()-t0>=10000)return Promise.resolve();
+    return push().then(function(){return Sy.busy?waitMs(250).then(step):Promise.resolve()});
   }
-  finish();
+  return step();
+}
+function wipeLocal(){
+  wiping=true;
+  var keys=[];
+  try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.toLowerCase().indexOf('dearsunday')===0)keys.push(k)}}catch(e){}
+  keys.forEach(function(k){try{localStorage.removeItem(k)}catch(e){}});
+}
+function finishLogout(){
+  clearInterval(Sy.poll);clearTimeout(Sy.timer);
+  var un=(window.dsPushUnregister&&MODE==='cloud')?Promise.race([Promise.resolve().then(window.dsPushUnregister).catch(function(){}),waitMs(4000)]):Promise.resolve();
+  un.then(function(){wipeLocal();location.reload()},function(){wipeLocal();location.reload()});
+}
+$('#logoutBtn').addEventListener('click',function(){
+  if(loggingOut)return;
+  var btn=$('#logoutBtn');
+  if(MODE!=='cloud'){loggingOut=true;finishLogout();return}
+  loggingOut=true;btn.disabled=true;
+  flushBeforeLogout().catch(function(){}).then(function(){
+    if(isDirty()&&!confirm('Còn thay đổi chưa lưu lên máy chủ, đăng xuất sẽ mất. Vẫn đăng xuất?')){
+      loggingOut=false;btn.disabled=false;markDirty();return;
+    }
+    finishLogout();
+  });
 });
 
 /* ============ tài khoản của tôi ============ */
@@ -1634,26 +1771,25 @@ $('#ttPickBtn').addEventListener('click',function(){
   }).catch(function(err){if(err.auth)return handleErr(err);setMsg($('#ttMsg'),err.message)});
 });
 var icsArm=false;
-function ago(ms){if(!ms)return 'chưa lần nào';var m=Math.round((Date.now()-ms)/60000);return m<1?'vừa xong':m<60?m+' phút trước':Math.round(m/60)+' giờ trước'}
 function drawExt(r){
   $('#icsUrl').value=r.icsUrl||'';
   $('#extStatus').innerHTML=r.sources.map(function(x){
     var st=!x.has?'<span class="pill mute">Chưa nối</span>':x.ok?'<span class="pill good">Đang đọc được</span>':'<span class="pill bad">Lỗi</span>';
-    return '<div class="li"><div><b>'+esc(x.name)+'</b> '+st+'<div class="muted">'+(x.has?esc(x.host)+' · '+x.count+' đợt đặt · cập nhật '+ago(x.at)+(x.err?' · '+esc(x.err):''):'Dán địa chỉ iCal ở trên.')+'</div></div>'+(x.has?'<button class="btn ghost" type="button" data-exclear="'+x.id+'">Gỡ</button>':'')+'</div>';
+    return '<div class="li"><div><b>'+esc(x.name)+'</b> '+st+'<div class="muted">'+(x.has?esc(x.host)+' · '+x.count+' đợt đặt · cập nhật '+ago(x.at)+(x.err?' · '+esc(x.err):''):'Dán địa chỉ iCal ở trên.')+'</div></div>'+(x.has?'<button class="btn ghost" type="button" data-exclear="'+esc(x.id)+'">Gỡ</button>':'')+'</div>';
   }).join('')+(r.auto?'':'<div class="warnbox">Chưa bật tự cập nhật mỗi 30 phút. Trong Apps Script chạy hàm caiTuDongLich một lần (xem hướng dẫn).</div>');
 }
 function renderIcal(){
   $('#pubUrl').value=pubUrl();$('#pubOpen').href=pubUrl();
   api('extInfo').then(function(r){if(!r.ok)throw new Error(r.error);drawExt(r)}).catch(function(err){
     if(err.auth)return handleErr(err);
-    setMsg($('#extMsg'),'Máy chủ chưa hỗ trợ lịch Airbnb và Booking. Hãy cập nhật code Apps Script (bản 3.2 trở lên).');
+    setMsg($('#extMsg'),'Máy chủ chưa hỗ trợ lịch Airbnb, Booking và Agoda. Hãy cập nhật code Apps Script (bản 3.2 trở lên).');
   });
 }
 function extCall(action,payload,okText){
   setMsg($('#extMsg'),'Đang đọc lịch...',true);
   return api(action,payload).then(function(r){
     if(!r.ok)throw new Error(r.error||'Không thực hiện được');
-    drawExt(r);$('#exAirbnb').value='';$('#exBooking').value='';
+    drawExt(r);$('#exAirbnb').value='';$('#exBooking').value='';$('#exAgoda').value='';
     var bad=r.sources.filter(function(x){return x.has&&!x.ok});
     setMsg($('#extMsg'),bad.length?'Có nền tảng chưa đọc được: '+bad.map(function(x){return x.name+' ('+x.err+')'}).join('; '):okText,!bad.length);
     return api('load',{extSince:0}).then(takeExt);
@@ -1664,6 +1800,7 @@ $('#extForm').addEventListener('submit',function(e){
   var src=[];
   if($('#exAirbnb').value.trim())src.push({id:'airbnb',url:$('#exAirbnb').value.trim()});
   if($('#exBooking').value.trim())src.push({id:'booking',url:$('#exBooking').value.trim()});
+  if($('#exAgoda').value.trim())src.push({id:'agoda',url:$('#exAgoda').value.trim()});
   if(!src.length){setMsg($('#extMsg'),'Hãy dán ít nhất một địa chỉ iCal.');return}
   extCall('setExt',{sources:src},'Đã lưu và cập nhật lịch.');
 });
@@ -1675,7 +1812,7 @@ $('#icsCopy').addEventListener('click',function(){var el=$('#icsUrl');el.select(
 $('#icsRotate').addEventListener('click',function(){
   if(!icsArm){icsArm=true;$('#icsRotate').textContent='Bấm lại để tạo mã mới (địa chỉ cũ sẽ ngừng hoạt động)';setTimeout(function(){icsArm=false;$('#icsRotate').textContent='Tạo lại mã lịch'},5000);return}
   icsArm=false;$('#icsRotate').textContent='Tạo lại mã lịch';
-  api('rotateIcs').then(function(r){if(!r.ok)throw new Error(r.error);$('#icsUrl').value=r.icsUrl;bao('Đã tạo mã mới. Hãy dán địa chỉ mới vào Airbnb và Booking.')}).catch(function(err){if(err.auth)return handleErr(err);setMsg($('#extMsg'),err.message)});
+  api('rotateIcs').then(function(r){if(!r.ok)throw new Error(r.error);$('#icsUrl').value=r.icsUrl;bao('Đã tạo mã mới. Hãy dán địa chỉ mới vào Airbnb, Booking và Agoda.')}).catch(function(err){if(err.auth)return handleErr(err);setMsg($('#extMsg'),err.message)});
 });
 function drawUsers(){
   $('#userList').innerHTML=uiUsers.map(function(u){

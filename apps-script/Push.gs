@@ -64,28 +64,39 @@ function pushCalendarChange_(source,old,rec) {
   if(!rec.ok)return;
   withLock_(function(){
     var p=props_(), baselineKey='PUSH_BASE_'+source, raw=p.getProperty(baselineKey);
-    var previous=raw?JSON.parse(raw):(old&&old.ok?old.ev:null);
-    var current=rec.ev||[];
+    var real=function(l){return (l||[]).filter(function(x){return !x[3];});};
+    var previous=raw?JSON.parse(raw):(old&&old.ok?real(old.ev):null);
+    var current=real(rec.ev);
+    // đơn cũ nay được nhận ra là bản sao: không phải "biến mất"
+    var echoNow=(rec.ev||[]).filter(function(x){return x[3];}).map(function(x){return x[0]+'|'+x[1];});
     p.setProperty(baselineKey,JSON.stringify(current));
     if(!previous)return;
     var key=function(x){return x[0]+'|'+x[1];};
     var before=previous.map(key), after=current.map(key);
     var added=current.filter(function(x){return before.indexOf(key(x))<0;});
-    var removed=previous.filter(function(x){return after.indexOf(key(x))<0;});
+    var removed=previous.filter(function(x){return after.indexOf(key(x))<0&&echoNow.indexOf(key(x))<0;});
     if(!added.length && !removed.length)return;
     var body=[];
     if(added.length)body.push('Ngày bận mới: '+added.map(function(x){return x[0]+' → '+x[1];}).join(', '));
     if(removed.length)body.push('Ngày không còn trong lịch: '+removed.map(function(x){return x[0]+' → '+x[1];}).join(', '));
     body.push('Mở app để kiểm tra. iCal không xác nhận lý do thay đổi.');
-    var id=Utilities.getUuid(), ev={id:id,at:Date.now(),title:'Lịch '+EXT_SOURCES[source]+' thay đổi',body:body.join('. ').slice(0,600)};
-    p.setProperty('PUSH_EVENT_'+id,JSON.stringify(ev));
-    var queue=JSON.parse(p.getProperty('PUSH_QUEUE')||'[]');
-    queue.push({event:ev,pending:pushDevices_().map(function(d){return d.key;}),attempts:0});
-    p.setProperty('PUSH_QUEUE',JSON.stringify(queue.slice(-2)));
-    var keys=Object.keys(p.getProperties()).filter(function(k){return k.indexOf('PUSH_EVENT_')===0;});
-    keys.sort(function(a,b){return JSON.parse(p.getProperty(b)).at-JSON.parse(p.getProperty(a)).at;});
-    keys.slice(30).forEach(function(k){p.deleteProperty(k);});
+    pushEnqueue_('Lịch '+EXT_SOURCES[source]+' thay đổi',body.join('. '));
   });
+}
+// Caller must hold the lock. Adds one event to the push queue.
+function pushEnqueue_(title,text) {
+  var p=props_();
+  var id=Utilities.getUuid(), ev={id:id,at:Date.now(),title:title,body:String(text).slice(0,600)};
+  p.setProperty('PUSH_EVENT_'+id,JSON.stringify(ev));
+  var queue=JSON.parse(p.getProperty('PUSH_QUEUE')||'[]');
+  queue.push({event:ev,pending:pushDevices_().map(function(d){return d.key;}),attempts:0});
+  p.setProperty('PUSH_QUEUE',JSON.stringify(queue.slice(-3)));
+  var keys=Object.keys(p.getProperties()).filter(function(k){return k.indexOf('PUSH_EVENT_')===0;});
+  keys.sort(function(a,b){return JSON.parse(p.getProperty(b)).at-JSON.parse(p.getProperty(a)).at;});
+  keys.slice(30).forEach(function(k){p.deleteProperty(k);});
+}
+function pushConflict_(text) {
+  withLock_(function(){pushEnqueue_('Trùng lịch phòng',text);});
 }
 function pushFlush_() {
   withLock_(function(){

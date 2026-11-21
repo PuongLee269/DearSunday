@@ -55,8 +55,27 @@
   };
   document.getElementById('pushTest').onclick=async function(){this.disabled=true;try{checked(await api('pushTest',{pushToken:token()}));status('Đã gửi thử. Hãy kiểm tra thông báo của thiết bị.');}catch(e){status(e.message);}finally{this.disabled=false;}};
   document.getElementById('pushRefresh').onclick=refresh;
+  // Đăng xuất: gỡ thiết bị khỏi máy chủ (lỗi thì bỏ qua, không chặn đăng xuất). Gọi trước khi xóa dữ liệu trên máy.
+  window.dsPushUnregister=async function(){
+    var t=lsGet(TOKEN_KEY)||'';
+    if(!t)return;
+    try{await api('pushUnregister',{pushToken:t});}catch(e){}
+    try{var f=await init();await f.deleteToken(messaging);}catch(e){}
+  };
+  // Mở app mà đã cấp quyền và từng bật: lấy lại token im lặng; nếu token đổi thì đăng ký lại với máy chủ. Lỗi thì bỏ qua.
+  var silentDone=false;
+  async function silentRenew(){
+    if(silentDone)return;
+    try{
+      var old=token();
+      if(!old||!self.Notification||Notification.permission!=='granted'||MODE!=='cloud')return;
+      silentDone=true;
+      var fcm=await init(), t=await fcm.getToken(messaging,{vapidKey:DEARSUNDAY_PUSH.vapidKey,serviceWorkerRegistration:registration});
+      if(t&&t!==old){var r=await api('pushRegister',{pushToken:t});if(r&&r.ok){lsSet(TOKEN_KEY,t);lsSet(TOKEN_KEY+'-user',A.user);}}
+    }catch(e){}
+  }
   var originalStart=startCloud;
-  startCloud=function(){originalStart();refresh();};
+  startCloud=function(){originalStart();refresh();silentRenew();};
   // Rebind a remembered token to the current signed-in account only after explicit enable.
   var originalLogout=forceLogout;
   forceLogout=function(message){lsDel(TOKEN_KEY);originalLogout(message);};

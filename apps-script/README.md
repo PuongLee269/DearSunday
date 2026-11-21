@@ -12,7 +12,7 @@ Trang web `docs/index.html` (chạy trên GitHub Pages) không có máy chủ ri
 1. Mở **https://script.new** (đăng nhập tài khoản Google bạn muốn dùng). Xóa code mẫu, dán toàn bộ nội dung file [`Code.gs`](./Code.gs).
 2. Đổi dòng đầu `var SETUP_CODE = "DOI-MA-NAY";` thành một chuỗi bí mật của bạn (ví dụ 16 ký tự ngẫu nhiên). Mã này chỉ dùng 1 lần để tạo Admin đầu tiên.
 3. **Triển khai → Triển khai mới → biểu tượng bánh răng chọn Ứng dụng web**. Chọn "Thực thi bằng: **Tôi**" và "Ai có quyền truy cập: **Bất kỳ ai**". Bấm **Triển khai**. Nếu Google có hỏi cấp quyền thì làm theo hướng dẫn trên màn hình.
-4. Sao chép **URL ứng dụng web** (dòng có nhãn "URL ứng dụng web", kết thúc bằng `/exec`, không phải dòng "Thư viện"). Mở thử URL đó trong cửa sổ ẩn danh, phải thấy `{"ok":true,"service":"DearSunday","build":"3",...}`.
+4. Sao chép **URL ứng dụng web** (dòng có nhãn "URL ứng dụng web", kết thúc bằng `/exec`, không phải dòng "Thư viện"). Mở thử URL đó trong cửa sổ ẩn danh, phải thấy `{"ok":true,"service":"DearSunday","build":"3.7",...}`.
 5. Mở trang web DearSunday. Ở màn đăng nhập, dán URL vào ô "Địa chỉ máy chủ", bấm **Lần đầu cài đặt? Tạo Admin**, nhập `SETUP_CODE`, tên đăng nhập và mật khẩu Admin của bạn.
 6. Vào **Cài đặt** để cấp tài khoản cho nhân viên. Gửi cho họ địa chỉ trang web, tên đăng nhập và mật khẩu.
 
@@ -20,7 +20,7 @@ Trang web `docs/index.html` (chạy trên GitHub Pages) không có máy chủ ri
 
 ## Cập nhật code máy chủ về sau
 
-Sửa code trong Apps Script, sau đó **Triển khai → Quản lý các bản triển khai → biểu tượng bút chì → Phiên bản: Phiên bản mới → Triển khai**. Làm vậy thì URL giữ nguyên.
+**Phải dán ĐỦ cả bốn file** vào dự án Apps Script (mỗi file một tab, cùng tên): `Code.gs`, `Push.gs`, `OtaFinance.gs` và `appsscript.json` (bật "Hiện tệp kê khai appsscript.json" trong Cài đặt dự án). Thứ tự các tab không quan trọng. Nếu quên `Push.gs` hoặc `OtaFinance.gs`, máy chủ vẫn chạy các chức năng cũ, nhưng thao tác thông báo hoặc đối soát tiền nền tảng sẽ báo "Máy chủ thiếu phần ...". Sau khi dán hoặc sửa code, vào **Triển khai → Quản lý các bản triển khai → biểu tượng bút chì → Phiên bản: Phiên bản mới → Triển khai**. Làm vậy thì URL giữ nguyên.
 
 ## Giới hạn dung lượng
 
@@ -45,6 +45,24 @@ Cần làm một lần trong Apps Script editor: chạy hàm `caiTuDongLich` (Go
 
 Giới hạn: lịch chỉ có ngày, không có giờ. Đặt từ nền tảng được coi là nhận 14:00, trả 11:00. Nền tảng tự đọc lịch của bạn sau vài giờ nên vẫn có khoảng chờ có thể đặt trùng.
 
+### Một link duy nhất cho cả ba nền tảng, có chống bản sao (build 3.7)
+
+Link lịch của app (`?ics=`) giờ gồm **đặt phòng trong app và mọi đơn thật từ Airbnb, Booking, Agoda**, nên dán cùng một link vào cả ba nền tảng là đủ: đơn ở nền tảng nào cũng được chặn ở hai nền tảng còn lại. Lịch xuất vẫn chỉ có ngày, tiêu đề "Reserved", không tên khách, số điện thoại, giá, mã khóa, tên nguồn.
+
+Vì nền tảng nhận ngày bận rồi xuất ngược lại ("Airbnb (Not available)", "CLOSED - Not available"...), máy chủ phân biệt **đơn thật** và **bản sao**:
+- Máy chủ nhớ những khoảng ngày đã xuất (`ICS_SENT`, tự dọn sau 3 ngày, tối đa khoảng 6 KB). Sự kiện từ nền tảng không có dấu hiệu đơn thật, nằm trọn trong các khoảng đó và xuất hiện sau khi app bắt đầu xuất (tối đa 2 giờ sau khi app ngừng xuất) là bản sao (echo).
+- Nếu chủ nhà còn nối trực tiếp nền tảng với nhau (ví dụ dán lịch Booking vào Airbnb), sự kiện nằm trọn trong đơn thật của một nền tảng khác cũng là bản sao (mirror). Đặt phòng trong app không dùng để xét mirror: quan hệ app → nền tảng chỉ dùng quy tắc echo ở trên. Nhờ vậy nhân viên nhập tay đơn nền tảng vào app rồi xóa đi thì đơn nền tảng vẫn được xuất.
+- Dấu hiệu đơn thật của Airbnb: tiêu đề đúng "Reserved" hoặc mô tả có "Reservation URL"/"reservations/details": luôn là đơn thật.
+- Cờ bản sao chỉ được nhả nếu sự kiện vẫn còn sau 36 giờ kể từ khi nguồn che phủ nó biến mất (app ngừng xuất khoảng đó, hoặc đơn thật nguồn khác biến mất): lúc đó nó là đơn thật, hiện trong app, được xuất và tính trùng. Nhờ vậy đơn Booking thật bị nhầm là bản sao (vì nhân viên nhập tay vào app trước) không bị chặn mãi sau khi xóa đặt phòng app.
+- Bản sao được giữ nguyên là bản sao đến khi biến mất hoặc được nhả, nên khi khách hủy, bản sao còn sót lại không thành đơn ma và không bị xuất lại; vài giờ sau nền tảng đọc lại lịch thì ngày mở hoàn toàn.
+- Bản sao không hiện trong app, không vào lịch công khai, không tạo dự tính thu nhập, không gửi thông báo. Admin thấy số bản sao đã bỏ qua của từng nguồn.
+
+**Báo trùng:** sau mỗi lần đọc, máy chủ tìm chồng lấn giữa đơn thật của hai nền tảng, hoặc đơn thật của nền tảng với đặt phòng trong app. Trang chủ hiện thẻ đỏ "Trùng lịch: ngày, nguồn" và gửi một thông báo đẩy cho mỗi vụ trùng mới (không có tên khách). Lần đầu sau khi nâng cấp chỉ ghi mốc, không báo.
+
+**Đúng cùng ngày nhận và trả:** đặt phòng trong app trùng đúng ngày với một đơn nền tảng không bị coi là trùng đỏ và không gửi thông báo, vì thường là nhân viên tự nhập đơn nền tảng vào app. Trang chủ hiện ghi chú vàng nhỏ "Đơn trong app trùng đúng ngày đơn <nền tảng>: nếu cùng một khách thì bỏ qua". Trùng lệch ngày vẫn là thẻ đỏ và có thông báo.
+
+Giới hạn: nền tảng đọc lịch chậm vài giờ nên vẫn có khoảng chờ đặt trùng. Bản sao chỉ nhận biết theo ngày: một đơn thật không có dấu hiệu (Booking, Agoda) trùng đúng ngày đơn thật của nền tảng khác có thể bị coi là bản sao và không báo trùng; đơn đến sau, trùng đúng khoảng app đang xuất trong lúc chờ, cũng có thể bị coi là bản sao (đơn Airbnb "Reserved" và đơn trùng một phần thì vẫn báo). Nếu hai nền tảng nối trực tiếp hai chiều với nhau thì chúng tự giữ ngày của nhau và app không gỡ được.
+
 ## Khóa thông minh TTLock: tự tạo mã vào cửa (build 3.3)
 
 Dùng [TTLock Open Platform](https://euopen.ttlock.com) (`api.sciener.com`).
@@ -60,7 +78,7 @@ Dùng [TTLock Open Platform](https://euopen.ttlock.com) (`api.sciener.com`).
 
 **Tự động:** chạy hàm `caiTuDongMaKhoa` một lần trong Apps Script editor. Mỗi giờ máy chủ tạo mã cho các đặt phòng sắp nhận trong 24 giờ tới mà chưa có mã.
 
-**Cần biết:** theo tài liệu TTLock, mã loại này phải được dùng ít nhất một lần trong 24 giờ kể từ giờ bắt đầu, nếu không sẽ bị vô hiệu. Thời hạn mã làm tròn theo giờ. Đổi giờ đặt phòng sau khi đã tạo mã thì mã cũ không tự đổi theo.
+**Cần biết:** theo tài liệu TTLock, mã loại này phải được dùng ít nhất một lần trong 24 giờ kể từ giờ bắt đầu, nếu không sẽ bị vô hiệu. Thời hạn mã làm tròn theo giờ. Đổi giờ đặt phòng sau khi đã tạo mã thì app báo "Mã lệch giờ" và cho tạo mã mới; mã cũ vẫn mở được cửa đến hết hạn (xóa từ xa cần gateway).
 
 ## Lịch công khai chỉ xem (build 3.4)
 
@@ -68,8 +86,19 @@ Trang `docs/lich.html` (https://puonglee269.github.io/DearSunday/lich.html) hi�
 
 Ai có link đều xem được ngày bận của phòng. Cần dán code Apps Script bản 3.4 và triển khai phiên bản mới để trang chạy.
 
+## Thêm Agoda (build 3.6)
+
+Agoda là nguồn thứ ba, dùng chung cơ chế với Airbnb và Booking: dán địa chỉ iCal xuất của Agoda (Agoda Partner Portal → Connect calendars → Export) vào ô **Agoda** ở **Cài đặt → Lịch Airbnb, Booking và Agoda**. Địa chỉ chứa mã truy cập riêng nên chỉ lưu trên máy chủ, không đưa vào mã nguồn hay trang công khai. Muốn Agoda thấy lịch của Dear Sunday, dán địa chỉ ở mục "Lịch của Dear Sunday" vào ô **Import a calendar from another site** của Agoda. Thẻ Agoda cũng có nút tạo mã vào cửa như hai nền tảng kia.
+
 ## Mã vào cửa cho đặt phòng từ Airbnb, Booking (build 3.5)
 
 Thẻ các ngày đặt từ Airbnb, Booking trên Trang chủ có nút **Tạo mã vào cửa** (hiện khi đã kết nối khóa TTLock). Lịch iCal chỉ có ngày, nên mã hiệu lực từ 14:00 ngày nhận đến 11:00 ngày trả cộng 1 giờ (giờ Việt Nam). Mã lưu trong kho script (`EXT_CODES`, tự xóa sau khi hết hạn hơn 1 ngày), đồng bộ cho mọi máy, có nút sao chép tin nhắn để người quản lý tự gửi khách trên nền tảng. Bấm lại không tạo mã mới. Mã không có trong lịch iCal xuất và lịch công khai.
 
 Lưu ý: khách hủy đơn thì mã vẫn còn hiệu lực đến hết hạn (xóa mã từ xa cần gateway). Nên tạo mã gần ngày nhận phòng. Đổi ngày đặt phòng trên nền tảng thì mã cũ không tự đổi theo.
+
+## Build 3.7
+
+- Máy chủ không còn phụ thuộc thứ tự nạp file; thiếu `Push.gs` hoặc `OtaFinance.gs` chỉ làm các action `push*`, `ota*` trả `code: "missing"`.
+- `ttCode` (tạo mã vào cửa) không tạo trùng: bấm lại trả mã cũ. Nếu đã đổi giờ đặt phòng thì tạo mã mới, trả `replaced` và `oldCode` (mã cũ vẫn còn hiệu lực trên khóa đến hết hạn).
+- Thêm action `otaCancel` (chỉ Admin): gỡ xác nhận thu tiền nền tảng và xóa giao dịch thu tương ứng.
+- Sửa nhỏ: đọc ngày iCal giờ UTC theo giờ Việt Nam, không lưu địa chỉ iCal vào thông báo lỗi, nhận lỗi token TTLock 10003 và 10004, so sánh chữ ký/mã lịch an toàn hơn, xóa mốc thông báo khi tắt nguồn lịch.
