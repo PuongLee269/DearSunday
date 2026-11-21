@@ -276,6 +276,37 @@ for(const direct of [false,true]){
  assert.ok(ics.includes('2027-01-02'.replace(/-/g,'')));
  console.log('ok 7');}
 
+// ---------- 12. Airbnb xuất ngược đặt phòng app có từ trước ICS_SENT ----------
+{const A='2026-12-22',B='2026-12-23',C='2026-12-24',E='2026-12-25';
+ const mk=()=>{const w=world();w.air.period=1;w.air.readsApp=false;w.env.saveBk([bkApp('b1',A,B),bkApp('b2',C,E)]);
+   const key=(s,e)=>s+'|'+e;
+   // dữ liệu cũ: Airbnb đã lưu hai khoảng này như đơn thật, chưa có ICS_SENT
+   w.env.ctx.props_().setProperty('ICS_SENT','{}');
+   w.env.ctx.props_().setProperty('EXT_airbnb',JSON.stringify({at:NOW,ok:true,err:'',ev:[[A,B,NOW-90*24*H,0],[C,E,NOW-90*24*H,0]]}));
+   return w;};
+ // (a) không dấu hiệu: thành echo sau 1 lần đọc
+ {const w=mk();w.air.imp=new Set([A,C]);w.air.period=1000*H;w.air.last=NOW;w.env.ctx.capNhatLichNgoai();
+  const ev=JSON.parse(w.env.ctx.props_().getProperty('EXT_airbnb')).ev;
+  assert.ok(ev.every(x=>x[3]===1),'echo '+JSON.stringify(ev));
+  assert.equal(w.env.state().dupes.length,0,'dupes rỗng');assert.equal(w.env.state().events.length,0);
+  assert.equal(w.env.state().conflicts.length,0);assert.equal(w.env.pushes('Lịch').length,0);
+  assert.equal(rangesOf(w.env.ics()).filter(r=>r[0]===A||r[0]===C).length,2,'không xuất lại ngoài đặt phòng app');
+  assert.ok(!/ext-/.test(w.env.ics()),'không xuất lại sự kiện nền tảng');
+  // (c) xóa đặt phòng app: echo nhả sau 36 giờ nếu sự kiện còn
+  w.env.saveBk([]);const td=NOW;let rel=null;
+  for(let i=0;i<110;i++){w.tick(1);const r=w.env.state().events.length===2;if(r&&rel===null)rel=NOW-td;
+    if(rel===null)assert.ok(!/ext-/.test(w.env.ics()),'chưa nhả: chưa xuất');}
+  assert.ok(rel!==null&&rel>=30*H&&rel<=36*H+30*MIN,'nhả sau '+rel/H);
+  assert.ok(/ext-/.test(w.env.ics()),'đã nhả: được xuất');console.log('ok 12a/12c');}
+ // (b) Airbnb "Reserved" trùng khít: vẫn đơn thật, có trong dupes
+ {const w=mk();w.air.own=[[A,B]];w.env.ctx.capNhatLichNgoai();
+  const ev=JSON.parse(w.env.ctx.props_().getProperty('EXT_airbnb')).ev;
+  assert.equal(ev.find(x=>x[0]===A)[3],0);
+  const st=w.env.state();assert.equal(st.events.length,1);assert.equal(st.dupes.length,1);assert.equal(st.dupes[0].s,A);
+  w.air.own=[[A,'2026-12-24']];w.env.ctx.capNhatLichNgoai(); // lệch ngày: vẫn thật, vào conflicts
+  assert.equal(w.env.state().conflicts.length>=1,true);console.log('ok 12b');}
+}
+
 // ---------- thiếu Push.gs / OtaFinance.gs ----------
 {const e=makeEnv(['Code']);e.ctx.props_().setProperty('EXT_SRC',JSON.stringify({booking:'https://bk.example/b.ics'}));
  const bk=new Plat('booking',{ownSum:'X',impSum:'X',period:4});bk.own.push([D0,D2]);
