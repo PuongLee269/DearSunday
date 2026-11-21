@@ -18,7 +18,7 @@ var SETUP_CODE = "";
 // Chỉ lưu muối và mã băm, không lưu mật khẩu. Để trống nếu muốn tạo Admin bằng SETUP_CODE trên trang web.
 var SEED_USERS = [];
 
-var BUILD = "3.5";
+var BUILD = "3.7";
 var TOKEN_DAYS = 14;
 var HASH_ROUNDS = 150;
 var MAX_FAILS = 5;
@@ -567,7 +567,7 @@ function rotateIcs_(req) {
 
 /* ---------- nhập lịch từ Airbnb, Booking (iCal) ---------- */
 
-var EXT_SOURCES = { airbnb: "Airbnb", booking: "Booking.com" };
+var EXT_SOURCES = { airbnb: "Airbnb", booking: "Booking.com", agoda: "Agoda" };
 
 function extSrc_() {
   var raw = props_().getProperty("EXT_SRC");
@@ -990,5 +990,3 @@ function ttCodeExt_(req) {
     return { ok: true, code: r.code, from: r.from, to: r.to };
   });
 }
-
-
