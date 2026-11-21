@@ -558,6 +558,7 @@ var ICS_ECHO_GRACE = 2 * 3600000;      // bản sao có thể xuất hiện mu�
 var ICS_SENT_KEEP = 3 * 86400000;      // quên khoảng đã ngừng xuất quá 3 ngày
 var ICS_SENT_MAX = 6000;               // kích thước tối đa của ICS_SENT (ký tự)
 var ICS_RELEASE = 36 * 3600000;        // cờ bản sao được nhả (thành đơn thật) nếu sự kiện còn sau ngần này thời gian kể từ khi nguồn che phủ nó biến mất
+var EXT_SIGNAL = { airbnb: 1 };        // nguồn có dấu hiệu đơn thật trong iCal (SUMMARY "Reserved"/Reservation URL): chỉ nguồn này mới bị xét echo theo đặt phòng app bất kể mốc thời gian
 var EXT_ORDER = ["booking", "agoda", "airbnb"]; // thứ tự xét đơn mới đọc cùng lúc: nguồn đứng trước được coi là đơn gốc
 
 function icsSentRead_() {
@@ -615,6 +616,11 @@ function icsEchoOf_(sent, s, e, firstSeen) {
     if (v && v[0] < firstSeen && firstSeen <= v[1] + ICS_ECHO_GRACE) { var p = k.split("|"); iv.push([p[0], p[1]]); }
   });
   return icsUnionCovers_(iv, s, e);
+}
+
+// Có một đặt phòng app nào phủ trọn [s,e) không (một đặt phòng, không ghép nhiều).
+function appCovers_(list, s, e) {
+  return list.some(function (b) { return b.s <= s && b.e >= e; });
 }
 
 // Các khoảng ngày của đặt phòng trong app, tính như khi xuất lịch.
@@ -773,7 +779,9 @@ function fetchExt_() {
   // ghi nhớ những gì đang xuất trước khi xét bản sao, để luôn có dữ liệu dù nền tảng chưa gọi ?ics
   try { icsSentUpdate_(icsBuild_().keys, now); } catch (err) {}
   var sent = icsSentRead_();
-  var recs = {}, olds = {};
+  var appR = [];
+  try { appR = appRanges_(); } catch (err) {}
+  var recs = {}, olds = {}, recl = {};
   Object.keys(EXT_SOURCES).forEach(function (id) {
     if (!src[id]) { p.deleteProperty("EXT_" + id); p.deleteProperty("PUSH_BASE_" + id); return; }
     var old = extRec_(id);
@@ -798,7 +806,11 @@ function fetchExt_() {
       ((old && old.ev) || []).forEach(function (x) { prev[x[0] + "|" + x[1]] = x; });
       rec.ev = raw.map(function (x) {
         var o = prev[x[0] + "|" + x[1]];
-        if (o && o[2]) return x[2] || !o[3] ? [x[0], x[1], o[2], 0] : (o[4] ? [x[0], x[1], o[2], o[3], o[4]] : [x[0], x[1], o[2], o[3]]);
+        if (o && o[2]) {
+          if (x[2]) return [x[0], x[1], o[2], 0]; // có dấu hiệu đơn thật: luôn là đơn thật
+          if (!o[3] && EXT_SIGNAL[id]) { recl[id + "|" + x[0] + "|" + x[1]] = 1; return [x[0], x[1], o[2], null]; } // đã lưu là đơn thật nhưng không có dấu hiệu: xét lại với đặt phòng app
+          return o[4] ? [x[0], x[1], o[2], o[3], o[4]] : [x[0], x[1], o[2], o[3]];
+        }
         return [x[0], x[1], now, x[2] ? 0 : null];
       });
     }
@@ -812,6 +824,9 @@ function fetchExt_() {
     if (!rec) return;
     rec.ev.forEach(function (x) {
       if (x[3] !== null) return;
+      // không có dấu hiệu đơn thật mà nằm trọn trong một đặt phòng app đang có: echo, bất kể mốc thời gian (nền tảng đã có từ trước khi máy chủ ghi ICS_SENT)
+      if (EXT_SIGNAL[id] && appCovers_(appR, x[0], x[1])) { x[3] = 1; return; }
+      if (recl[id + "|" + x[0] + "|" + x[1]]) { x[3] = 0; return; } // sự kiện cũ: chỉ xét theo đặt phòng app, không xét mirror
       if (icsEchoOf_(sent, x[0], x[1], x[2])) { x[3] = 1; return; } // 1 = echo
       var base = [];
       Object.keys(recs).forEach(function (o) {
@@ -834,7 +849,7 @@ function fetchExt_() {
           var v = sent[k], q = k.split("|");
           if (v && q[0] < x[1] && x[0] < q[1]) { if (v[1] > lastOv) lastOv = v[1]; if (v[1] >= now - ICS_ECHO_GRACE) act.push([q[0], q[1]]); }
         });
-        covered = icsUnionCovers_(act, x[0], x[1]);
+        covered = icsUnionCovers_(act, x[0], x[1]) || (EXT_SIGNAL[id] && appCovers_(appR, x[0], x[1]));
         if (lastOv) since = lastOv;
       } else {
         var oth = [];
