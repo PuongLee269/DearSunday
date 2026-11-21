@@ -727,6 +727,7 @@ function icsDay_(v) {
 // Đọc các VEVENT thành [bắt đầu, kết thúc, dấu hiệu đơn thật 0/1). Bỏ sự kiện đã hủy, đã qua, và sự kiện do chính Dear Sunday xuất ra.
 function parseIcs_(txt) {
   var cut = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  var far = new Date(Date.now() + 330 * 86400000).toISOString().slice(0, 10); // bỏ ngày xa hơn ~11 tháng: nền tảng tự khóa ở mốc 1 năm, không phải đơn khách
   var lines = icsFold_(txt).split(/\r?\n/);
   var out = [], seen = {}, cur = null;
   lines.forEach(function (ln) {
@@ -735,7 +736,7 @@ function parseIcs_(txt) {
       if (cur && cur.s && !cur.cancel && !/dear\s*sunday|dearsunday/i.test((cur.sum || "") + (cur.uid || ""))) {
         var e = cur.e;
         if (!e || e <= cur.s) e = icsAddDay_(cur.s);
-        if (e >= cut) {
+        if (e >= cut && cur.s <= far) {
           var k = cur.s + "|" + e;
           // dấu hiệu đơn thật của Airbnb: SUMMARY đúng "Reserved" hoặc có đường dẫn đơn
           var real = (cur.sum === "Reserved" || /Reservation URL|reservations\/details/i.test(cur.desc || "")) ? 1 : 0;

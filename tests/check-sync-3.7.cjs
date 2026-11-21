@@ -313,4 +313,21 @@ for(const direct of [false,true]){
  e.fetch=()=>({getResponseCode:()=>200,getContentText:()=>bk.export()});
  e.ctx.capNhatLichNgoai();e.saveBk([bkApp('b1',D0,D2)]);e.ctx.capNhatLichNgoai();
  assert.equal(e.state().events.length,1);console.log('ok chỉ Code.gs');}
+// ---------- 13. ngày nhập xa hơn ~11 tháng bị bỏ ----------
+{const env=makeEnv(['Code','Push','Ota']);
+ const feed=['BEGIN:VCALENDAR','VERSION:2.0',
+   'BEGIN:VEVENT','UID:far','DTSTART;VALUE=DATE:20271126','DTEND;VALUE=DATE:20271128','SUMMARY:Airbnb (Not available)','END:VEVENT',
+   'BEGIN:VEVENT','UID:near','DTSTART;VALUE=DATE:20261231','DTEND;VALUE=DATE:20270102','SUMMARY:Airbnb (Not available)','END:VEVENT',
+   'END:VCALENDAR'].join('\r\n')+'\r\n';
+ env.ctx.props_().setProperty('EXT_SRC',JSON.stringify({airbnb:'https://air.example/a.ics'}));
+ env.fetch=()=>({getResponseCode:()=>200,getContentText:()=>feed});
+ env.ctx.capNhatLichNgoai();
+ const ev=env.state().events;
+ assert.ok(!ev.some(x=>x.s==='2027-11-26'),'sự kiện 360 ngày bị bỏ: '+JSON.stringify(ev));
+ assert.ok(ev.some(x=>x.s==='2026-12-31'),'sự kiện 30 ngày còn');
+ const ics=env.ics();
+ assert.ok(!ics.includes('20271126'),'không xuất ngày xa');
+ assert.ok(ics.includes('20261231'),'xuất ngày gần');
+ console.log('ok 13');}
+
 console.log('PASS: check-sync-3.7');

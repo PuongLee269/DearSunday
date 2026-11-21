@@ -57,6 +57,7 @@ Vì nền tảng nhận ngày bận rồi xuất ngược lại ("Airbnb (Not av
 - Riêng Airbnb (nguồn có dấu hiệu đơn thật): sự kiện không có dấu hiệu đơn thật mà nằm trọn trong một đặt phòng app đang có là bản sao bất kể mốc thời gian, kể cả sự kiện đã lưu trước đó là đơn thật (phân loại lại ở lần đọc kế tiếp). Nhờ vậy ngày Airbnb xuất ngược từ trước khi máy chủ nâng cấp không còn hiện ghi chú "trùng đúng ngày" và không bị xuất lại. Sự kiện có "Reserved"/Reservation URL vẫn là đơn thật. Cờ này cũng được nhả sau 36 giờ khi đặt phòng app biến mất.
 - Bản sao được giữ nguyên là bản sao đến khi biến mất hoặc được nhả, nên khi khách hủy, bản sao còn sót lại không thành đơn ma và không bị xuất lại; vài giờ sau nền tảng đọc lại lịch thì ngày mở hoàn toàn.
 - Bản sao không hiện trong app, không vào lịch công khai, không tạo dự tính thu nhập, không gửi thông báo. Admin thấy số bản sao đã bỏ qua của từng nguồn.
+- Ngày nhập bắt đầu xa hơn khoảng 11 tháng bị bỏ qua (nền tảng tự khóa ngày ở mốc 1 năm, không phải đơn khách).
 
 **Báo trùng:** sau mỗi lần đọc, máy chủ tìm chồng lấn giữa đơn thật của hai nền tảng, hoặc đơn thật của nền tảng với đặt phòng trong app. Trang chủ hiện thẻ đỏ "Trùng lịch: ngày, nguồn" và gửi một thông báo đẩy cho mỗi vụ trùng mới (không có tên khách). Lần đầu sau khi nâng cấp chỉ ghi mốc, không báo.
 
