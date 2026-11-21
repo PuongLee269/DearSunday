@@ -102,8 +102,8 @@ function fakeServer(mode, opt) {
     if (st.mode === 'cu' && MISSING.includes(a) && !(opt.otaInfoOld && (a === 'otaInfo'))) return unknown;
     switch (a) {
       case 'status': return { ok: true, hasUsers: true };
-      case 'me': return { ok: true, user: 'admin', role: 'admin' };
-      case 'login': return { ok: true, token: 'tok', user: 'admin', role: 'admin' };
+      case 'me': return { ok: true, user: opt.role === 'staff' ? 'nv' : 'admin', role: opt.role || 'admin' };
+      case 'login': return { ok: true, token: 'tok', user: opt.role === 'staff' ? 'nv' : 'admin', role: opt.role || 'admin' };
       case 'load': {
         const ev = [{ src: 'airbnb', s: addD(10), e: addD(12) }, { src: 'booking', s: addD(14), e: addD(15) }];
         if (st.mode === 'moi' || opt.extraSrc) { ev.push({ src: 'agoda', s: addD(20), e: addD(22) }); ev.push({ src: 'vrbo', s: addD(25), e: addD(26) }); }
@@ -323,6 +323,75 @@ async function groupForm(browser, base, mode) {
   await page.fill('#bkDate', addD(40)); await page.waitForTimeout(100);
   ok(!(await page.isDisabled('#bkSave')), 'chọn lại ngày: lưu được');
   ok(errors.length === 0, 'không lỗi JS' + errors.join('|'));
+  await ctx.close();
+}
+
+async function groupGuestSync(browser, base, mode) {
+  console.log('# [' + mode + '] đặt phòng tự vào danh sách Khách hàng + nút thêm từ đặt phòng cũ');
+  const st = fakeServer(mode);
+  const { ctx, page, errors } = await newPage(browser, base, st, { w: 320 });
+  const add = async (day, name, phone) => {
+    await page.click('[data-newbk]'); await page.click('[data-pkg="night"]');
+    await page.fill('#bkDate', addD(day)); await page.fill('#bkName', name); await page.fill('#bkPhone', phone);
+    await page.waitForTimeout(100);
+    await page.evaluate(() => document.querySelector('#bkForm').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })));
+    await page.waitForTimeout(200);
+  };
+  const guests = () => page.evaluate(() => S.guests.map(g => ({ n: g.name, p: g.phone, k: Object.keys(g).sort().join(',') })));
+  const n0 = (await guests()).length;
+  await add(40, 'Lan Mới', '0911 222 333');
+  let g = await guests();
+  ok(g.length === n0 + 1 && g[0].n === 'Lan Mới' && g[0].p === '0911 222 333' && g[0].k === 'codes,id,name,phone,status,ver', 'đặt phòng có tên + SĐT: thêm khách mới đúng định dạng');
+  await add(45, 'Lan Khác Tên', '+84.911.222.333');
+  g = await guests();
+  ok(g.length === n0 + 1 && g[0].n === 'Lan Mới', 'cùng SĐT khác cách viết: không trùng khách, không ghi đè tên');
+  await add(50, 'TEST abc', '0999888777');
+  ok((await guests()).length === n0 + 1, 'tên bắt đầu "TEST": không thêm khách');
+  await add(55, '  Minh   Không SĐT ', '');
+  await add(60, 'minh không sđt', '');
+  g = await guests();
+  ok(g.length === n0 + 2 && g[0].n === 'Minh Không SĐT', 'không SĐT: khớp theo tên (không phân biệt hoa thường), chỉ thêm 1');
+  await add(65, 'Minh Không SĐT', '0933 444 555');
+  g = await guests();
+  ok(g.length === n0 + 2 && g[0].p === '0933 444 555', 'khách cũ chưa có SĐT: được bổ sung SĐT, không thêm khách');
+  /* đặt phòng cũ: chưa có khách "Khách X" (đơn không SĐT) */
+  await goTab(page, 'guests');
+  ok(await page.isVisible('#guestSync') && await overflow(page) <= 0, 'nút thêm từ đặt phòng cũ hiện, không tràn ngang 320');
+  const before = (await guests()).length;
+  await page.click('#guestSync'); await page.waitForTimeout(150);
+  const mid = (await guests()).length;
+  ok(mid === before + 1 && /Đã thêm 1 khách/.test(await page.textContent('#toast')), 'bấm nút lần 1: thêm đúng 1 khách (Khách X) và báo số khách' );
+  await page.click('#guestSync'); await page.waitForTimeout(150);
+  ok((await guests()).length === mid, 'bấm nút lần 2: không tạo trùng');
+  ok(errors.length === 0, 'không lỗi JS ' + errors.join('|'));
+  await ctx.close();
+}
+
+async function groupStaffPrices(browser, base, mode) {
+  console.log('# [' + mode + '] nhân viên sửa Giá các gói; chiết khấu nền tảng chỉ Admin');
+  let st = fakeServer(mode, { role: 'staff' });
+  let { ctx, page, errors } = await newPage(browser, base, st, { w: 320, ls: { 'dearsunday-auth': JSON.stringify({ token: 'tok', user: 'nv', role: 'staff' }) } });
+  ok(!(await page.isVisible('#tabSettings')) && !(await page.isVisible('#moreSettings')), 'nhân viên không thấy Cài đặt');
+  await goTab(page, 'fin');
+  ok(await page.isVisible('#pkgPanel > summary'), 'nhân viên thấy khối Giá các gói ở tab Tài chính');
+  await page.click('#pkgPanel > summary');
+  await page.fill('[data-pp="night"][data-pf="gia"]', '777000'); await page.dispatchEvent('[data-pp="night"][data-pf="gia"]', 'change'); await page.waitForTimeout(300);
+  ok(await page.evaluate(() => S.prices.night.gia) === 777000, 'nhân viên sửa giá: lưu vào dữ liệu');
+  await page.waitForTimeout(2500);
+  ok(st.log.some(b => b.action === 'save' && b.data.prices.night.gia === 777000), 'giá được đồng bộ lên máy chủ');
+  ok(await overflow(page) <= 0, 'Tài chính 320px (nhân viên): không tràn ngang');
+  ok(!(await page.isVisible('#otaSettings')) && !(await page.isVisible('#otaConfigForm')), 'nhân viên không thấy phần chiết khấu nền tảng');
+  ok(errors.length === 0, 'không lỗi JS ' + errors.join('|'));
+  await ctx.close();
+  st = fakeServer(mode);
+  ({ ctx, page, errors } = await newPage(browser, base, st, { w: 390 }));
+  await goTab(page, 'fin');
+  ok(await page.isVisible('#pkgPanel > summary'), 'Admin thấy Giá các gói ở Tài chính');
+  await goTab(page, 'settings');
+  ok(await page.isVisible('#icalPanel') && await page.isVisible('#userPanel') && await page.isVisible('#dataPanel'), 'Admin vẫn thấy đủ Kết nối, Người dùng, Dữ liệu');
+  if (mode === 'moi') ok(await page.isVisible('#otaSettings > summary'), 'Admin thấy chiết khấu nền tảng');
+  ok(await overflow(page) <= 0, 'Cài đặt 390px (Admin): không tràn ngang');
+  ok(errors.length === 0, 'không lỗi JS ' + errors.join('|'));
   await ctx.close();
 }
 
@@ -578,6 +647,8 @@ async function groupPushRenew(browser, base) {
       await groupFinanceAndCode(browser, base, mode);
       await groupForm(browser, base, mode);
       await groupGuestCode(browser, base, mode);
+      await groupGuestSync(browser, base, mode);
+      await groupStaffPrices(browser, base, mode);
       await groupAgo(browser, base, mode);
       await groupLogout(browser, base, mode);
       await groupOta(browser, base, mode);

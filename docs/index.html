@@ -465,6 +465,7 @@ h2.sec{font-size:21px}
       <label class="f">Số điện thoại<input type="text" id="gPhone" required placeholder="0912345678"></label>
       <button class="btn">Thêm khách</button>
     </form>
+    <div class="panel bar" id="guestSyncBar"><span class="muted">Khách ở các đặt phòng cũ chưa có trong danh sách?</span><button class="btn ghost" type="button" id="guestSync">Thêm khách từ các đặt phòng cũ</button></div>
     <div class="panel" id="guestList"></div>
     <div id="guestDetail"></div>
   </div></section>
@@ -488,6 +489,13 @@ h2.sec{font-size:21px}
     <div class="grid" id="finStats"></div>
     <div class="panel" id="finTable" hidden></div>
     <div class="panel" id="finCat"></div>
+    <details class="panel fold" id="pkgPanel">
+      <summary><h3>Giá các gói</h3></summary>
+      <div class="fold-body">
+        <p class="muted">Giá tự điền khi tạo đặt phòng mới (vẫn sửa tay được ở từng đặt phòng). Sửa xong tự lưu và đồng bộ. Mọi tài khoản đều sửa được. Giá chỉ nằm trong dữ liệu sau khi đăng nhập, không nằm trong mã nguồn công khai.</p>
+        <div id="pkgCards" class="stack"></div>
+      </div>
+    </details>
     <details class="panel fold" id="txFold">
       <summary><h3>Ghi thu chi thủ công</h3></summary>
       <form class="row" id="txForm">
@@ -512,14 +520,6 @@ h2.sec{font-size:21px}
 
   <section id="settings" hidden><div class="stack">
     <h2 class="pg">Cài đặt</h2>
-    <h3 class="grp">Giá và tính tiền</h3>
-    <details class="panel fold" id="pkgPanel">
-      <summary><h3>Giá các gói</h3></summary>
-      <div class="fold-body">
-        <p class="muted">Giá tự điền khi tạo đặt phòng mới (vẫn sửa tay được ở từng đặt phòng). Sửa xong tự lưu và đồng bộ. Giá chỉ nằm trong dữ liệu sau khi đăng nhập, không nằm trong mã nguồn công khai.</p>
-        <div id="pkgCards" class="stack"></div>
-      </div>
-    </details>
     <h3 class="grp" id="grpConn">Kết nối</h3>
     <details class="panel fold" id="icalPanel">
       <summary><div class="st"><h3>Lịch Airbnb, Booking và Agoda</h3></div><span class="pill mute" id="icBadge"></span></summary>
@@ -1155,7 +1155,7 @@ function renderPrice(){
   $('#bkPayHint').textContent=payHint();
   document.querySelectorAll('[data-fpay]').forEach(function(x){x.setAttribute('aria-pressed',x.dataset.fpay===F.pay)});
   var g=F.pkg&&GOI_BY[F.pkg];
-  $('#bkPriceHint').innerHTML=!g?'Chọn gói để tự tính giá.':(c>0?'Giá gói '+money(GP(F.pkg).gia)+(g.kieu==='dem'&&F.nights>1?' × '+F.nights+' đêm':'')+(F.le?' + '+F.le+'% lễ':'')+' = '+money(c)+(F.touched?' <button type="button" class="linkbtn" data-reprice="1">Tính lại</button>':''):'Gói này chưa có giá. Nhập giá ở Cài đặt hoặc gõ trực tiếp ở đây.');
+  $('#bkPriceHint').innerHTML=!g?'Chọn gói để tự tính giá.':(c>0?'Giá gói '+money(GP(F.pkg).gia)+(g.kieu==='dem'&&F.nights>1?' × '+F.nights+' đêm':'')+(F.le?' + '+F.le+'% lễ':'')+' = '+money(c)+(F.touched?' <button type="button" class="linkbtn" data-reprice="1">Tính lại</button>':''):'Gói này chưa có giá. Nhập giá ở Tài chính (Giá các gói) hoặc gõ trực tiếp ở đây.');
 }
 function renderCodeRow(){var b=editId&&find(S.bookings,editId);$('#bkCodeRow').hidden=!(TT&&MODE==='cloud')||!!(b&&b.code)}
 function renderForm(){renderCodeRow();renderDateStep();renderPkgs();renderTimeStep();renderPrice();renderSummary()}
@@ -1226,6 +1226,7 @@ $('#bkForm').addEventListener('submit',function(e){
   else{bk=Object.assign({id:uid(),paidAmt:0},rec);S.bookings.push(bk)}
   // Đặt phòng mới: ghi thu theo lựa chọn. Sửa đặt phòng: chỉ ghi khi bạn chủ động đổi lựa chọn thu tiền, sửa giá thì không tự sinh giao dịch.
   if(bk&&(!wasEdit||F.pay!==F.payInit))applyPay(bk,F.pay);
+  if(bk)guestFromBooking(bk);
   calCur=F.date;selDay=F.date;
   var wantCode=TT&&MODE==='cloud'&&!$('#bkCodeRow').hidden&&$('#bkCode').checked&&bk&&!bk.code;
   var staleCode=wasEdit&&timesChanged&&bk&&codeOff(bk);
@@ -1292,12 +1293,34 @@ function renderGuests(){
    '<form id="verForm" style="display:grid;gap:10px"><label class="f">Profile khách<textarea id="vProf" rows="5" required placeholder="Dán profile vào đây"></textarea></label><label class="f">Số điện thoại<input type="text" id="vPhone" value="'+esc(g.phone)+'" required></label><button class="btn">Kiểm tra ngay</button></form>'+v+'</div>'+
    guestCodePanel(g)+'</div>';
 }
+/* chuẩn hóa để khớp khách: SĐT bỏ khoảng trắng/dấu chấm/gạch, +84 hoặc 84 thành 0; tên không phân biệt hoa thường, bỏ khoảng trắng thừa */
+function normPhone(x){
+  var p=String(x==null?'':x).replace(/[\s.\-()]/g,'');
+  if(/^\+?84\d{9,10}$/.test(p))p='0'+p.replace(/^\+?84/,'');
+  return /\d/.test(p)?p:'';
+}
+function normName(x){return String(x==null?'':x).replace(/\s+/g,' ').trim().toLowerCase()}
+/* đưa khách của một đặt phòng vào S.guests (cùng định dạng tab Khách hàng). Trả về true nếu thêm khách mới. Không tự save. */
+function guestFromBooking(b){
+  if(!b||b.ext)return false;
+  var raw=String(b.name||'').trim(),nm=normName(raw);
+  if(!nm||/^test(\b|$)/i.test(raw)||/^khách đặt trên /i.test(raw))return false;
+  var ph=normPhone(b.phone),g;
+  if(ph){g=S.guests.filter(function(x){return normPhone(x.phone)===ph})[0]||S.guests.filter(function(x){return !normPhone(x.phone)&&normName(x.name)===nm})[0]}
+  else{g=S.guests.filter(function(x){return normName(x.name)===nm})[0]}
+  if(g){
+    if(ph&&!normPhone(g.phone))g.phone=String(b.phone).trim();
+    return false;
+  }
+  S.guests.unshift({id:uid(),name:raw.replace(/\s+/g,' '),phone:ph?String(b.phone).trim():'',status:'PENDING',ver:[],codes:[]});
+  return true;
+}
 /* đặt phòng đang ở hoặc sắp tới của khách (khớp tên, hoặc số điện thoại nếu có) */
 function guestBooking(g){
-  var n=nowMin(),nm=String(g.name||'').trim().toLowerCase(),ph=String(g.phone||'').replace(/\s+/g,'');
+  var n=nowMin(),nm=normName(g.name),ph=normPhone(g.phone);
   if(!nm&&!ph)return null;
   var list=S.bookings.filter(function(b){
-    var same=(nm&&String(b.name||'').trim().toLowerCase()===nm)||(ph&&String(b.phone||'').replace(/\s+/g,'')===ph);
+    var same=(nm&&normName(b.name)===nm)||(ph&&normPhone(b.phone)===ph);
     return same&&occOf(b).e>n;
   }).sort(function(a,b){return tmin(a.startAt)-tmin(b.startAt)});
   var cur=list.filter(function(b){return occOf(b).s<=n})[0];
@@ -1446,7 +1469,7 @@ function setView(v){
   $('#plantsView').hidden=v!=='plants';$('#toysView').hidden=v!=='toys';
   $('#vPlants').setAttribute('aria-pressed',v==='plants');$('#vToys').setAttribute('aria-pressed',v==='toys');
 }
-function renderAll(){renderHome();renderPlants();renderToys();renderClean();renderNotes();renderGuests();renderFin();if(!$('#settings').hidden)renderSettings();if(!$('#bookPanel').hidden)renderForm()}
+function renderAll(){renderHome();renderPlants();renderToys();renderClean();renderNotes();renderGuests();renderFin();renderPriceTab();if(!$('#settings').hidden)renderSettings();if(!$('#bookPanel').hidden)renderForm()}
 var SECTIONS=['home','items','clean','guests','fin','notes','settings','account'];
 function hideMenus(){
   $('#acctMenu').hidden=true;$('#whoBtn').setAttribute('aria-expanded','false');
@@ -1588,6 +1611,11 @@ tdf.addEventListener('focusin',function(){tdf.classList.add('open')});
 tdf.addEventListener('focusout',function(){setTimeout(function(){if(!tdf.contains(document.activeElement)&&!$('#tdText').value&&!$('#tdDue').value)tdf.classList.remove('open')},0)});
 onSubmit('#todoForm',function(){tdf.classList.remove('open');S.todos.push({id:uid(),text:$('#tdText').value.trim(),due:$('#tdDue').value||'',done:false});$('#tdText').value='';$('#tdDue').value=''});
 onSubmit('#noteForm',function(){S.notes.push({id:uid(),text:$('#nText').value.trim(),at:Date.now()});$('#nText').value=''});
+$('#guestSync').addEventListener('click',function(){
+  var n=0;S.bookings.forEach(function(b){if(guestFromBooking(b))n++});
+  if(n)save();renderAll();
+  bao(n?'Đã thêm '+n+' khách từ các đặt phòng cũ':'Không có khách mới để thêm');
+});
 onSubmit('#guestForm',function(){var g={id:uid(),name:$('#gName').value.trim(),phone:$('#gPhone').value.trim(),status:'PENDING',ver:[],codes:[]};S.guests.unshift(g);openGuest=g.id;$('#gName').value='';$('#gPhone').value=''});
 onSubmit('#txForm',function(){S.tx.push({id:uid(),type:$('#tType').value,cat:$('#tCat').value.trim(),amt:+$('#tAmt').value,desc:$('#tDesc').value.trim(),at:Date.now()});$('#tCat').value='';$('#tAmt').value='';$('#tDesc').value=''});
 ['#plantsView','#toysView','#cleanView'].forEach(function(sel){
@@ -1927,7 +1955,6 @@ function renderSettings(){
   showAi();
   var adm=MODE==='cloud'&&A.role==='admin';
   $('#userPanel').hidden=!adm;$('#icalPanel').hidden=!adm;$('#ttPanel').hidden=!adm;$('#dataPanel').hidden=!adm;$('#grpConn').hidden=!adm;$('#grpUsers').hidden=!adm;
-  renderPriceTab();
   if(!adm)return;
   renderIcal();renderTt();
   var m=Sy.meta;
