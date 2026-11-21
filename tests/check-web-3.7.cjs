@@ -108,6 +108,8 @@ function fakeServer(mode, opt) {
         if (st.mode === 'moi' || opt.extraSrc) { ev.push({ src: 'agoda', s: addD(20), e: addD(22) }); ev.push({ src: 'vrbo', s: addD(25), e: addD(26) }); }
         const r = { ok: true, version: st.version, data: st.data, updatedAt: Date.now(), updatedBy: 'admin', tt: st.tt, extAt: 5 };
         if (!opt.noExt) r.ext = ev;
+        if (opt.conflicts) r.extConflicts = opt.conflicts;
+        if (opt.dupes) r.extDupes = opt.dupes;
         return r;
       }
       case 'save': st.data = body.data; st.version++; return { ok: true, version: st.version, updatedAt: Date.now(), updatedBy: 'admin' };
@@ -220,6 +222,29 @@ async function groupExt(browser, base, mode) {
   st = fakeServer(mode, { noExt: true });
   ({ ctx, page, errors } = await newPage(browser, base, st, { ls: { 'dearsunday-ext': '{not json' } }));
   ok(errors.length === 0, 'EXT không phải JSON: trang vẫn chạy');
+  await ctx.close();
+}
+
+async function groupConflicts(browser, base, mode) {
+  console.log('# [' + mode + '] báo trùng lịch');
+  const conflicts = [{ s: addD(10), e: addD(12), src: ['airbnb', 'app'] }, { s: addD(14), e: addD(15), src: ['agoda', 'booking'] }];
+  for (const w of [320, 390]) {
+    const st = fakeServer(mode, { conflicts, dupes: [{ s: addD(30), e: addD(32), src: ['app', 'booking'] }] });
+    const { ctx, page, errors } = await newPage(browser, base, st, { w });
+    const txt = await page.textContent('#confBox');
+    {
+      ok(/Trùng lịch: \d\d\/\d\d → \d\d\/\d\d — Airbnb, App/.test(txt) && /Booking, Agoda|Agoda, Booking/.test(txt), 'hiện thẻ trùng lịch với ngày và nguồn (w=' + w + ')');
+      ok(await page.evaluate(() => document.querySelectorAll('#confBox .warnbox').length) === 2, 'hai thẻ cảnh báo đỏ, ghi chú vàng không tính');
+      ok(await overflow(page) <= 0, 'không tràn ngang ở ' + w + 'px');
+    }
+    ok(/Đơn trong app trùng đúng ngày đơn Booking: nếu cùng một khách thì bỏ qua/.test(await page.textContent('#confBox')) && await page.evaluate(() => document.querySelectorAll('#confBox .dupnote').length) === 1, 'ghi chú vàng đơn app trùng đúng ngày (w=' + w + ')');
+    ok(errors.length === 0, 'không lỗi JS' + errors.join('|'));
+    await ctx.close();
+  }
+  const st = fakeServer(mode, {});
+  const { ctx, page, errors } = await newPage(browser, base, st, { w: 320 });
+  ok((await page.textContent('#confBox')).trim() === '', 'không có conflicts (máy chủ cũ/không trùng): không hiện gì');
+  ok(errors.length === 0, 'không lỗi JS' + errors.join('|'));
   await ctx.close();
 }
 
@@ -422,6 +447,7 @@ async function groupPushRenew(browser, base) {
       console.log('\n===== MÁY CHỦ GIẢ: ' + (mode === 'cu' ? 'CŨ (3.4/3.5)' : 'MỚI') + ' =====');
       await groupLayout(browser, base, mode);
       await groupExt(browser, base, mode);
+      await groupConflicts(browser, base, mode);
       await groupFinanceAndCode(browser, base, mode);
       await groupForm(browser, base, mode);
       await groupGuestCode(browser, base, mode);

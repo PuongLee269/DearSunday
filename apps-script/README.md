@@ -45,6 +45,24 @@ Cần làm một lần trong Apps Script editor: chạy hàm `caiTuDongLich` (Go
 
 Giới hạn: lịch chỉ có ngày, không có giờ. Đặt từ nền tảng được coi là nhận 14:00, trả 11:00. Nền tảng tự đọc lịch của bạn sau vài giờ nên vẫn có khoảng chờ có thể đặt trùng.
 
+### Một link duy nhất cho cả ba nền tảng, có chống bản sao (build 3.7)
+
+Link lịch của app (`?ics=`) giờ gồm **đặt phòng trong app và mọi đơn thật từ Airbnb, Booking, Agoda**, nên dán cùng một link vào cả ba nền tảng là đủ: đơn ở nền tảng nào cũng được chặn ở hai nền tảng còn lại. Lịch xuất vẫn chỉ có ngày, tiêu đề "Reserved", không tên khách, số điện thoại, giá, mã khóa, tên nguồn.
+
+Vì nền tảng nhận ngày bận rồi xuất ngược lại ("Airbnb (Not available)", "CLOSED - Not available"...), máy chủ phân biệt **đơn thật** và **bản sao**:
+- Máy chủ nhớ những khoảng ngày đã xuất (`ICS_SENT`, tự dọn sau 3 ngày, tối đa khoảng 6 KB). Sự kiện từ nền tảng không có dấu hiệu đơn thật, nằm trọn trong các khoảng đó và xuất hiện sau khi app bắt đầu xuất (tối đa 2 giờ sau khi app ngừng xuất) là bản sao (echo).
+- Nếu chủ nhà còn nối trực tiếp nền tảng với nhau (ví dụ dán lịch Booking vào Airbnb), sự kiện nằm trọn trong đơn thật của một nền tảng khác cũng là bản sao (mirror). Đặt phòng trong app không dùng để xét mirror: quan hệ app → nền tảng chỉ dùng quy tắc echo ở trên. Nhờ vậy nhân viên nhập tay đơn nền tảng vào app rồi xóa đi thì đơn nền tảng vẫn được xuất.
+- Dấu hiệu đơn thật của Airbnb: tiêu đề đúng "Reserved" hoặc mô tả có "Reservation URL"/"reservations/details": luôn là đơn thật.
+- Cờ bản sao chỉ được nhả nếu sự kiện vẫn còn sau 36 giờ kể từ khi nguồn che phủ nó biến mất (app ngừng xuất khoảng đó, hoặc đơn thật nguồn khác biến mất): lúc đó nó là đơn thật, hiện trong app, được xuất và tính trùng. Nhờ vậy đơn Booking thật bị nhầm là bản sao (vì nhân viên nhập tay vào app trước) không bị chặn mãi sau khi xóa đặt phòng app.
+- Bản sao được giữ nguyên là bản sao đến khi biến mất hoặc được nhả, nên khi khách hủy, bản sao còn sót lại không thành đơn ma và không bị xuất lại; vài giờ sau nền tảng đọc lại lịch thì ngày mở hoàn toàn.
+- Bản sao không hiện trong app, không vào lịch công khai, không tạo dự tính thu nhập, không gửi thông báo. Admin thấy số bản sao đã bỏ qua của từng nguồn.
+
+**Báo trùng:** sau mỗi lần đọc, máy chủ tìm chồng lấn giữa đơn thật của hai nền tảng, hoặc đơn thật của nền tảng với đặt phòng trong app. Trang chủ hiện thẻ đỏ "Trùng lịch: ngày, nguồn" và gửi một thông báo đẩy cho mỗi vụ trùng mới (không có tên khách). Lần đầu sau khi nâng cấp chỉ ghi mốc, không báo.
+
+**Đúng cùng ngày nhận và trả:** đặt phòng trong app trùng đúng ngày với một đơn nền tảng không bị coi là trùng đỏ và không gửi thông báo, vì thường là nhân viên tự nhập đơn nền tảng vào app. Trang chủ hiện ghi chú vàng nhỏ "Đơn trong app trùng đúng ngày đơn <nền tảng>: nếu cùng một khách thì bỏ qua". Trùng lệch ngày vẫn là thẻ đỏ và có thông báo.
+
+Giới hạn: nền tảng đọc lịch chậm vài giờ nên vẫn có khoảng chờ đặt trùng. Bản sao chỉ nhận biết theo ngày: một đơn thật không có dấu hiệu (Booking, Agoda) trùng đúng ngày đơn thật của nền tảng khác có thể bị coi là bản sao và không báo trùng; đơn đến sau, trùng đúng khoảng app đang xuất trong lúc chờ, cũng có thể bị coi là bản sao (đơn Airbnb "Reserved" và đơn trùng một phần thì vẫn báo). Nếu hai nền tảng nối trực tiếp hai chiều với nhau thì chúng tự giữ ngày của nhau và app không gỡ được.
+
 ## Khóa thông minh TTLock: tự tạo mã vào cửa (build 3.3)
 
 Dùng [TTLock Open Platform](https://euopen.ttlock.com) (`api.sciener.com`).

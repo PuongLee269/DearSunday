@@ -81,6 +81,7 @@ form.row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
 .pill.warn{background:var(--part)}.pill.bad{background:var(--bad-soft);color:var(--bad)}.pill.mute{background:#efe3d0}.pill.good{background:var(--leaf)}.pill.k{background:var(--deep);color:var(--cream)}
 .good{color:var(--good)}.inc{color:var(--good)}.exp{color:var(--bad)}
 .warnbox{background:var(--bad-soft);color:var(--bad);border:3px solid var(--brown);border-radius:16px;padding:9px 12px;font-weight:700;overflow-wrap:anywhere}
+.dupnote{background:var(--part);color:var(--brown);border:2px solid var(--brown);border-radius:12px;padding:6px 10px;font-size:15px;margin-bottom:10px;overflow-wrap:anywhere}
 .warnbox.okbox{background:var(--leaf);color:var(--brown)}
 .empty{padding:10px 0;opacity:.8}
 .linkbtn{font:inherit;font-family:var(--f-head);font-weight:700;background:none;border:0;color:var(--deep);padding:8px 0;cursor:pointer;text-decoration:underline}
@@ -282,6 +283,7 @@ body.syncing .wrap{opacity:.35;pointer-events:none}
       <span>Tài khoản đang dùng mật khẩu mặc định. Hãy đổi mật khẩu để bảo vệ dữ liệu khách.</span>
       <button class="btn ghost" data-t="account">Đổi mật khẩu</button>
     </div>
+    <div id="confBox"></div>
     <div id="todayStrip"></div>
 
     <div class="panel">
@@ -594,8 +596,13 @@ function cleanExt(list){
   if(!Array.isArray(list))return[];
   return list.filter(function(x){return x&&typeof x==='object'&&typeof x.src==='string'&&validDate(x.s)&&validDate(x.e)&&x.e>=x.s});
 }
-var EXT={at:0,events:[]}, TT=false;
-try{var _x=JSON.parse(lsGet(EXT_KEY)||'null');if(_x&&Array.isArray(_x.events))EXT={at:+_x.at||0,events:cleanExt(_x.events)}}catch(e){}
+var EXT={at:0,events:[],conflicts:null,dupes:null}, TT=false;
+/* báo trùng do máy chủ tính; máy chủ cũ không có khóa này thì conflicts=null và không hiện gì */
+function cleanConf(list){
+  if(!Array.isArray(list))return null;
+  return list.filter(function(c){return c&&typeof c==='object'&&validDate(c.s)&&validDate(c.e)&&Array.isArray(c.src)}).slice(0,20);
+}
+try{var _x=JSON.parse(lsGet(EXT_KEY)||'null');if(_x&&Array.isArray(_x.events))EXT={at:+_x.at||0,events:cleanExt(_x.events),conflicts:cleanConf(_x.conflicts),dupes:cleanConf(_x.dupes)}}catch(e){}
 function GP(id){return (S&&S.prices&&S.prices[id])||{gia:0,ghi:''}}
 function gioBatDau(g){var out=[],m=tomin(g.tu),e=tomin(g.den);for(;m<=e;m+=30)out.push(pad2(Math.floor(m/60))+':'+pad2(m%60));return out}
 
@@ -746,6 +753,18 @@ function chipGoi(b){var g=GOI_BY[b.pkg];return '<span class="pill" style="backgr
 /* ============ trang chủ ============ */
 var calMode=lsGet(CAL_KEY)==='week'?'week':'month', calCur=today(), selDay=null, editId=null, armDel=null, showDone=false;
 
+var CONF_NAME={app:'App',airbnb:'Airbnb',booking:'Booking',agoda:'Agoda'};
+function renderConf(){
+  var box=$('#confBox');if(!box)return;
+  var t=today(),l=(EXT.conflicts||[]).filter(function(c){return c.e>t});
+  box.innerHTML=l.map(function(c){
+    var dd=fd(c.s)+' → '+fd(c.e);
+    return '<div class="warnbox" role="alert" style="margin-bottom:10px">Trùng lịch: '+esc(dd)+' — '+c.src.map(function(n){return esc(CONF_NAME[n]||'Nền tảng')}).join(', ')+'</div>';
+  }).join('')+(EXT.dupes||[]).filter(function(c){return c.e>t}).map(function(c){
+    var n=c.src.filter(function(k){return k!=='app'}).map(function(k){return esc(CONF_NAME[k]||'nền tảng')}).join(', ');
+    return '<div class="dupnote" role="note">'+esc(fd(c.s)+' → '+fd(c.e))+': Đơn trong app trùng đúng ngày đơn '+n+': nếu cùng một khách thì bỏ qua</div>';
+  }).join('');
+}
 function renderToday(){
   var n=nowMin(),cur=null,cl=null;
   allB().forEach(function(b){var o=occOf(b);if(o.s<=n&&n<o.e)cur=b;else if(o.e<=n&&n<o.e+o.c)cl=b});
@@ -895,7 +914,7 @@ function renderUpcoming(){
   $('#upList').innerHTML=list.length?list.map(bookingRow).join(''):'<div class="empty">Chưa có đặt phòng sắp tới. Bấm "+ Đặt phòng" để thêm.</div>';
 }
 function renderHome(){
-  renderToday();renderTodos();renderCal();renderUpcoming();
+  renderConf();renderToday();renderTodos();renderCal();renderUpcoming();
   $('#guestNames').innerHTML=S.guests.map(function(g){return '<option value="'+esc(g.name)+'"></option>'}).join('');
 }
 
@@ -1528,7 +1547,7 @@ function initialSync(){
 function takeExt(res){
   if(res&&res.tt!==undefined&&!!res.tt!==TT){TT=!!res.tt;renderAll()}
   if(!res||res.ext===undefined)return;
-  EXT={at:res.extAt||0,events:cleanExt(res.ext)};
+  EXT={at:res.extAt||0,events:cleanExt(res.ext),conflicts:cleanConf(res.extConflicts),dupes:cleanConf(res.extDupes)};
   if(!wiping){try{localStorage.setItem(EXT_KEY,JSON.stringify(EXT))}catch(e){}}
   renderAll();
 }
