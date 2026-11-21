@@ -90,6 +90,20 @@ function otaReceive_(req){
     otaWrite_(d,user.username);return {ok:true,amount:req.actualAmount};
   });
 }
+// Chỉ Admin: gỡ xác nhận thu tiền của một mục đối soát và xóa giao dịch thu tương ứng.
+function otaCancel_(req){
+  var user=auth_(req,true),id=String(req.id||'');
+  return withLock_(function(){
+    var d=JSON.parse(readData_()||'{}'),r=(d.otaLedger||[]).filter(function(x){return x.id===id;})[0];
+    if(!r)fail_('bad','Không tìm thấy mục đối soát, hãy tải lại');
+    var txId='receipt:'+id,before=(d.tx||[]).length;
+    if(Array.isArray(d.tx))d.tx=d.tx.filter(function(t){return t.id!==txId&&t.otaId!==id;});
+    var had=!!r.receipt||before!==(d.tx||[]).length;
+    delete r.receipt;
+    if(had)otaWrite_(d,user.username);
+    return {ok:true};
+  });
+}
 // Prevent stale clients, merges and ordinary saves from modifying confirmed receipts.
 function otaProtectSave_(incoming,current){
   incoming.otaLedger=current.otaLedger||[];

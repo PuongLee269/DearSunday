@@ -46,7 +46,8 @@ function doPost(e) {
   } catch (err) {
     return out_({ ok: false, error: "Yêu cầu không hợp lệ", code: "bad" });
   }
-  var fn = ACTIONS_[req.action];
+  var table = actions_();
+  var fn = Object.prototype.hasOwnProperty.call(table, req.action) ? table[req.action] : null;
   if (!fn) return out_({ ok: false, error: "Không rõ yêu cầu", code: "bad" });
   try {
     return out_(fn(req));
@@ -57,38 +58,51 @@ function doPost(e) {
   }
 }
 
-var ACTIONS_ = {
-  otaInfo: otaInfo_,
-  otaSetConfig: otaSetConfig_,
-  otaAdd: otaAdd_,
-  otaReceive: otaReceive_,
-  pushRegister: pushRegister_,
-  pushUnregister: pushUnregister_,
-  pushInfo: pushInfo_,
-  pushTest: pushTest_,
-  status: status_,
-  bootstrap: bootstrap_,
-  login: login_,
-  me: me_,
-  load: load_,
-  save: save_,
-  changePassword: changePassword_,
-  listUsers: listUsers_,
-  createUser: createUser_,
-  setPassword: setPassword_,
-  setRole: setRole_,
-  setActive: setActive_,
-  deleteUser: deleteUser_,
-  extInfo: extInfo_,
-  setExt: setExt_,
-  syncExt: syncExt_,
-  rotateIcs: rotateIcs_,
-  ttInfo: ttInfo_,
-  ttSet: ttSet_,
-  ttPick: ttPick_,
-  ttCode: ttCode_,
-  ttCodeExt: ttCodeExt_
-};
+// Bảng action được dựng lúc có yêu cầu (không phải lúc nạp file) để không phụ thuộc thứ tự nạp các file .gs.
+// Push.gs và OtaFinance.gs là phần tùy chọn: thiếu file nào thì action của file đó trả code "missing", phần còn lại vẫn chạy.
+function missing_(part) {
+  return function () {
+    fail_("missing", "Máy chủ thiếu phần " + part + ". Hãy dán thêm file này vào Apps Script rồi triển khai lại.");
+  };
+}
+
+function actions_() {
+  var a = {
+    status: status_,
+    bootstrap: bootstrap_,
+    login: login_,
+    me: me_,
+    load: load_,
+    save: save_,
+    changePassword: changePassword_,
+    listUsers: listUsers_,
+    createUser: createUser_,
+    setPassword: setPassword_,
+    setRole: setRole_,
+    setActive: setActive_,
+    deleteUser: deleteUser_,
+    extInfo: extInfo_,
+    setExt: setExt_,
+    syncExt: syncExt_,
+    rotateIcs: rotateIcs_,
+    ttInfo: ttInfo_,
+    ttSet: ttSet_,
+    ttPick: ttPick_,
+    ttCode: ttCode_,
+    ttCodeExt: ttCodeExt_
+  };
+  var O = "OtaFinance.gs", P = "Push.gs";
+  a.otaInfo = typeof otaInfo_ === "function" ? otaInfo_ : missing_(O);
+  a.otaSetConfig = typeof otaSetConfig_ === "function" ? otaSetConfig_ : missing_(O);
+  a.otaAdd = typeof otaAdd_ === "function" ? otaAdd_ : missing_(O);
+  a.otaReceive = typeof otaReceive_ === "function" ? otaReceive_ : missing_(O);
+  a.otaCancel = typeof otaCancel_ === "function" ? otaCancel_ : missing_(O);
+  a.pushRegister = typeof pushRegister_ === "function" ? pushRegister_ : missing_(P);
+  a.pushUnregister = typeof pushUnregister_ === "function" ? pushUnregister_ : missing_(P);
+  a.pushInfo = typeof pushInfo_ === "function" ? pushInfo_ : missing_(P);
+  a.pushTest = typeof pushTest_ === "function" ? pushTest_ : missing_(P);
+  return a;
+}
 
 /* ---------- tiện ích ---------- */
 
@@ -157,6 +171,16 @@ function key_() {
   return k;
 }
 
+// So sánh chuỗi theo thời gian không phụ thuộc vị trí khác biệt.
+function safeEq_(a, b) {
+  a = String(a);
+  b = String(b);
+  var diff = a.length ^ b.length;
+  var n = Math.max(a.length, b.length);
+  for (var i = 0; i < n; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+
 function sign_(s) {
   return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(s, key_()));
 }
@@ -174,7 +198,7 @@ function auth_(req, needAdmin) {
   var i = t.indexOf(".");
   if (i < 1) fail_("auth", "Chưa đăng nhập");
   var p = t.slice(0, i);
-  if (sign_(p) !== t.slice(i + 1)) fail_("auth", "Phiên đăng nhập không hợp lệ");
+  if (!safeEq_(sign_(p), t.slice(i + 1))) fail_("auth", "Phiên đăng nhập không hợp lệ");
   var d;
   try {
     d = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(p)).getDataAsString());
@@ -270,7 +294,22 @@ function throttle_(key) {
   if (fails >= MAX_FAILS) fail_("locked", "Thử sai quá nhiều lần. Vui lòng đợi 10 phút rồi thử lại.");
   return {
     fail: function () {
-      cache.put(key, String(fails + 1), 600);
+      // Đọc-tăng-ghi trong khóa ngắn để các lần sai đồng thời không bị tính thiếu; không lấy được khóa thì tính như cũ.
+      var lk = null, got = false, n = fails;
+      try {
+        lk = LockService.getScriptLock();
+        got = lk.tryLock(2000);
+      } catch (err) {
+        got = false;
+      }
+      try {
+        if (got) n = Number(cache.get(key) || 0);
+        cache.put(key, String(n + 1), 600);
+      } finally {
+        if (got) {
+          try { lk.releaseLock(); } catch (err2) {}
+        }
+      }
     },
     clear: function () {
       cache.remove(key);
@@ -389,7 +428,7 @@ function save_(req) {
       var cur = readData_();
       return { ok: false, conflict: true, version: m.version, updatedAt: m.updatedAt, updatedBy: m.updatedBy, data: cur ? JSON.parse(cur) : null };
     }
-    otaProtectSave_(req.data, JSON.parse(readData_() || '{}'));
+    if (typeof otaProtectSave_ === "function") otaProtectSave_(req.data, JSON.parse(readData_() || '{}'));
     str = JSON.stringify(req.data);
     if (str.length > MAX_DATA_CHARS) fail_('big', 'Dữ liệu quá lớn');
     writeData_(str);
@@ -542,7 +581,7 @@ function icsText_() {
 }
 
 function ics_(token) {
-  if (token !== icsToken_()) {
+  if (!safeEq_(token, icsToken_())) {
     return out_({ ok: false, service: "DearSunday", build: BUILD, error: "Địa chỉ lịch không đúng" });
   }
   return ContentService.createTextOutput(icsText_()).setMimeType(ContentService.MimeType.ICAL);
@@ -584,6 +623,13 @@ function icsFold_(txt) {
 }
 
 function icsDay_(v) {
+  v = String(v || "").trim();
+  var u = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/i.exec(v);
+  if (u) {
+    // Giờ UTC: đổi sang ngày theo giờ Việt Nam (+07:00)
+    var t = new Date(Date.UTC(+u[1], +u[2] - 1, +u[3], +u[4], +u[5], +u[6]) + 7 * 3600000);
+    return t.toISOString().slice(0, 10);
+  }
   var m = /(\d{4})(\d{2})(\d{2})/.exec(v || "");
   return m ? m[1] + "-" + m[2] + "-" + m[3] : "";
 }
@@ -626,7 +672,7 @@ function fetchExt_() {
   var p = props_();
   var src = extSrc_();
   Object.keys(EXT_SOURCES).forEach(function (id) {
-    if (!src[id]) { p.deleteProperty("EXT_" + id); return; }
+    if (!src[id]) { p.deleteProperty("EXT_" + id); p.deleteProperty("PUSH_BASE_" + id); return; }
     var old = extRec_(id);
     var rec = { at: Date.now(), ok: false, err: "", ev: [] };
     try {
@@ -637,15 +683,16 @@ function fetchExt_() {
       else if (body.indexOf("BEGIN:VCALENDAR") < 0) rec.err = "Địa chỉ này không phải lịch iCal";
       else { rec.ok = true; rec.ev = parseIcs_(body); }
     } catch (err) {
-      rec.err = "Không đọc được: " + String(err && err.message).slice(0, 120);
+      // Không lưu thông điệp lỗi gốc: có thể chứa địa chỉ iCal bí mật.
+      rec.err = "Không tải được lịch";
     }
     if (!rec.ok && old && old.ev) rec.ev = old.ev; // lỗi tạm thời thì giữ lịch lần trước
     p.setProperty("EXT_" + id, JSON.stringify(rec));
-    try { pushCalendarChange_(id, old, rec); } catch (e) { p.setProperty("PUSH_LAST_ERROR", "Không ghi được thông báo lịch."); }
+    try { if (typeof pushCalendarChange_ === "function") pushCalendarChange_(id, old, rec); } catch (e) { p.setProperty("PUSH_LAST_ERROR", "Không ghi được thông báo lịch."); }
   });
   p.setProperty("EXT_AT", String(Date.now()));
-  try { otaCapture_(); } catch (e) { console.error('Không lưu được mục đối soát nền tảng'); }
-  try { pushFlush_(); } catch (e) { p.setProperty("PUSH_LAST_ERROR", "Không gửi được thông báo; kiểm tra quyền Apps Script."); }
+  try { if (typeof otaCapture_ === "function") otaCapture_(); } catch (e) { console.error('Không lưu được mục đối soát nền tảng'); }
+  try { if (typeof pushFlush_ === "function") pushFlush_(); } catch (e) { p.setProperty("PUSH_LAST_ERROR", "Không gửi được thông báo; kiểm tra quyền Apps Script."); }
 }
 
 function extCodes_() {
@@ -775,13 +822,13 @@ function ttToken_(force) {
   return b.access_token;
 }
 
-// Gọi API có accessToken. Hết hạn token (mã 10004) thì xin token mới và thử lại một lần.
+// Gọi API có accessToken. Hết hạn/sai token (mã 10003, 10004) thì xin token mới và thử lại một lần.
 function ttCall_(path, params, retried) {
   var c = ttCfg_();
   var form = Object.assign({ clientId: c.clientId, accessToken: ttToken_(!!retried), date: String(Date.now()) }, params || {});
   var b = ttForm_(path, form);
   if (b.errcode && b.errcode !== 0) {
-    if (b.errcode === 10004 && !retried) return ttCall_(path, params, true);
+    if ((b.errcode === 10003 || b.errcode === 10004) && !retried) return ttCall_(path, params, true);
     fail_("tt", "TTLock báo lỗi " + b.errcode + ": " + (b.errmsg || b.description || ""));
   }
   return b;
@@ -838,12 +885,18 @@ function ttMs_(local) {
 }
 
 // Tạo mã theo khoảng thời gian (loại 3). TTLock làm tròn theo giờ: bắt đầu làm tròn xuống, kết thúc làm tròn lên.
-function ttMakeCode_(startAt, endAt, name) {
-  var c = ttCfg_();
+function ttWindow_(startAt, endAt) {
   var H = 3600000;
   var s = Math.floor(ttMs_(startAt) / H) * H;
   var e = Math.ceil((ttMs_(endAt) + TT_GRACE_AFTER_H * H) / H) * H;
   if (!(e > s)) fail_("bad", "Giờ trả phòng phải sau giờ nhận phòng");
+  return { from: s, to: e };
+}
+
+function ttMakeCode_(startAt, endAt, name) {
+  var c = ttCfg_();
+  var w = ttWindow_(startAt, endAt);
+  var s = w.from, e = w.to;
   var b = ttCall_("/v3/keyboardPwd/get", {
     lockId: String(c.lockId), keyboardPwdVersion: String(c.ver || 4), keyboardPwdType: "3",
     keyboardPwdName: String(name || "Dear Sunday").slice(0, 30), startDate: String(s), endDate: String(e)
@@ -855,17 +908,22 @@ function ttMakeCode_(startAt, endAt, name) {
 // Ghi thay đổi vào dữ liệu đồng bộ từ phía máy chủ (tăng phiên bản để các máy tự nhận).
 function mutateData_(fn) {
   return withLock_(function () {
-    var raw = readData_();
-    var data = raw ? JSON.parse(raw) : null;
-    if (!data) fail_("bad", "Chưa có dữ liệu đồng bộ trên máy chủ");
-    var res = fn(data);
-    var str = JSON.stringify(data);
-    if (str.length > MAX_DATA_CHARS) fail_("big", "Dữ liệu quá lớn");
-    writeData_(str);
-    var m = meta_();
-    setMeta_({ version: m.version + 1, updatedAt: Date.now(), updatedBy: "ttlock" });
-    return res;
+    return mutateDataLocked_(fn);
   });
+}
+
+// Dùng khi đã đang giữ khóa (khóa script không lồng nhau được).
+function mutateDataLocked_(fn) {
+  var raw = readData_();
+  var data = raw ? JSON.parse(raw) : null;
+  if (!data) fail_("bad", "Chưa có dữ liệu đồng bộ trên máy chủ");
+  var res = fn(data);
+  var str = JSON.stringify(data);
+  if (str.length > MAX_DATA_CHARS) fail_("big", "Dữ liệu quá lớn");
+  writeData_(str);
+  var m = meta_();
+  setMeta_({ version: m.version + 1, updatedAt: Date.now(), updatedBy: "ttlock" });
+  return res;
 }
 
 function applyCode_(b, r) {
@@ -875,19 +933,33 @@ function applyCode_(b, r) {
   b.codeTo = r.to;
 }
 
+// Trong khóa: nếu đặt phòng đã có mã khớp khung giờ hiện tại thì trả lại mã cũ, không gọi TTLock.
+// Nếu đã đổi giờ thì tạo mã mới và trả replaced + oldCode (mã cũ vẫn còn hiệu lực trên khóa đến hết hạn).
 function ttCode_(req) {
   auth_(req);
   if (!ttReady_()) fail_("bad", "Chưa kết nối khóa TTLock. Admin vào Cài đặt để kết nối.");
   var id = String(req.bookingId || "");
-  var snap = JSON.parse(readData_() || "{}");
-  var b0 = (snap.bookings || []).filter(function (x) { return x.id === id; })[0];
-  if (!b0) fail_("bad", "Chưa tìm thấy đặt phòng này trên máy chủ. Hãy đợi đồng bộ rồi thử lại.");
-  var r = ttMakeCode_(b0.startAt, b0.endAt, b0.name);
-  mutateData_(function (d) {
-    var b = (d.bookings || []).filter(function (x) { return x.id === id; })[0];
-    if (b) applyCode_(b, r);
+  return withLock_(function () {
+    var snap = JSON.parse(readData_() || "{}");
+    var b0 = (snap.bookings || []).filter(function (x) { return x.id === id; })[0];
+    if (!b0) fail_("bad", "Chưa tìm thấy đặt phòng này trên máy chủ. Hãy đợi đồng bộ rồi thử lại.");
+    var w = ttWindow_(b0.startAt, b0.endAt);
+    if (b0.code) {
+      var noWin = b0.codeFrom === undefined && b0.codeTo === undefined; // mã cũ không rõ khung giờ: giữ nguyên
+      if (noWin || (b0.codeFrom === w.from && b0.codeTo === w.to)) {
+        return { ok: true, code: String(b0.code), from: b0.codeFrom === undefined ? w.from : b0.codeFrom, to: b0.codeTo === undefined ? w.to : b0.codeTo };
+      }
+    }
+    var oldCode = b0.code ? String(b0.code) : "";
+    var r = ttMakeCode_(b0.startAt, b0.endAt, b0.name);
+    mutateDataLocked_(function (d) {
+      var b = (d.bookings || []).filter(function (x) { return x.id === id; })[0];
+      if (b) applyCode_(b, r);
+    });
+    var res = { ok: true, code: r.code, from: r.from, to: r.to };
+    if (oldCode) { res.replaced = true; res.oldCode = oldCode; }
+    return res;
   });
-  return { ok: true, code: r.code, from: r.from, to: r.to };
 }
 
 // Bộ hẹn giờ mỗi giờ: tạo mã cho đặt phòng sắp nhận (trong TT_LEAD_HOURS giờ tới) mà chưa có mã.
@@ -900,10 +972,15 @@ function tuTaoMaKhoa() {
     var s = ttMs_(b0.startAt), e = ttMs_(b0.endAt);
     if (e <= now || s - now > TT_LEAD_HOURS * 3600000) return;
     try {
-      var r = ttMakeCode_(b0.startAt, b0.endAt, b0.name);
-      mutateData_(function (d) {
-        var b = (d.bookings || []).filter(function (x) { return x.id === b0.id; })[0];
-        if (b && !b.code) applyCode_(b, r);
+      withLock_(function () {
+        // đọc lại trong khóa: ttCode_ có thể vừa tạo mã cho đặt phòng này
+        var cur = (JSON.parse(readData_() || "{}").bookings || []).filter(function (x) { return x.id === b0.id; })[0];
+        if (!cur || cur.code) return;
+        var r = ttMakeCode_(cur.startAt, cur.endAt, cur.name);
+        mutateDataLocked_(function (d) {
+          var b = (d.bookings || []).filter(function (x) { return x.id === b0.id; })[0];
+          if (b && !b.code) applyCode_(b, r);
+        });
       });
     } catch (err) {
       console.error("Không tạo được mã cho " + b0.id + ": " + err.message);

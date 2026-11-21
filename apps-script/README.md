@@ -12,7 +12,7 @@ Trang web `docs/index.html` (chạy trên GitHub Pages) không có máy chủ ri
 1. Mở **https://script.new** (đăng nhập tài khoản Google bạn muốn dùng). Xóa code mẫu, dán toàn bộ nội dung file [`Code.gs`](./Code.gs).
 2. Đổi dòng đầu `var SETUP_CODE = "DOI-MA-NAY";` thành một chuỗi bí mật của bạn (ví dụ 16 ký tự ngẫu nhiên). Mã này chỉ dùng 1 lần để tạo Admin đầu tiên.
 3. **Triển khai → Triển khai mới → biểu tượng bánh răng chọn Ứng dụng web**. Chọn "Thực thi bằng: **Tôi**" và "Ai có quyền truy cập: **Bất kỳ ai**". Bấm **Triển khai**. Nếu Google có hỏi cấp quyền thì làm theo hướng dẫn trên màn hình.
-4. Sao chép **URL ứng dụng web** (dòng có nhãn "URL ứng dụng web", kết thúc bằng `/exec`, không phải dòng "Thư viện"). Mở thử URL đó trong cửa sổ ẩn danh, phải thấy `{"ok":true,"service":"DearSunday","build":"3",...}`.
+4. Sao chép **URL ứng dụng web** (dòng có nhãn "URL ứng dụng web", kết thúc bằng `/exec`, không phải dòng "Thư viện"). Mở thử URL đó trong cửa sổ ẩn danh, phải thấy `{"ok":true,"service":"DearSunday","build":"3.7",...}`.
 5. Mở trang web DearSunday. Ở màn đăng nhập, dán URL vào ô "Địa chỉ máy chủ", bấm **Lần đầu cài đặt? Tạo Admin**, nhập `SETUP_CODE`, tên đăng nhập và mật khẩu Admin của bạn.
 6. Vào **Cài đặt** để cấp tài khoản cho nhân viên. Gửi cho họ địa chỉ trang web, tên đăng nhập và mật khẩu.
 
@@ -20,7 +20,7 @@ Trang web `docs/index.html` (chạy trên GitHub Pages) không có máy chủ ri
 
 ## Cập nhật code máy chủ về sau
 
-Sửa code trong Apps Script, sau đó **Triển khai → Quản lý các bản triển khai → biểu tượng bút chì → Phiên bản: Phiên bản mới → Triển khai**. Làm vậy thì URL giữ nguyên.
+**Phải dán ĐỦ cả bốn file** vào dự án Apps Script (mỗi file một tab, cùng tên): `Code.gs`, `Push.gs`, `OtaFinance.gs` và `appsscript.json` (bật "Hiện tệp kê khai appsscript.json" trong Cài đặt dự án). Thứ tự các tab không quan trọng. Nếu quên `Push.gs` hoặc `OtaFinance.gs`, máy chủ vẫn chạy các chức năng cũ, nhưng thao tác thông báo hoặc đối soát tiền nền tảng sẽ báo "Máy chủ thiếu phần ...". Sau khi dán hoặc sửa code, vào **Triển khai → Quản lý các bản triển khai → biểu tượng bút chì → Phiên bản: Phiên bản mới → Triển khai**. Làm vậy thì URL giữ nguyên.
 
 ## Giới hạn dung lượng
 
@@ -60,7 +60,7 @@ Dùng [TTLock Open Platform](https://euopen.ttlock.com) (`api.sciener.com`).
 
 **Tự động:** chạy hàm `caiTuDongMaKhoa` một lần trong Apps Script editor. Mỗi giờ máy chủ tạo mã cho các đặt phòng sắp nhận trong 24 giờ tới mà chưa có mã.
 
-**Cần biết:** theo tài liệu TTLock, mã loại này phải được dùng ít nhất một lần trong 24 giờ kể từ giờ bắt đầu, nếu không sẽ bị vô hiệu. Thời hạn mã làm tròn theo giờ. Đổi giờ đặt phòng sau khi đã tạo mã thì mã cũ không tự đổi theo.
+**Cần biết:** theo tài liệu TTLock, mã loại này phải được dùng ít nhất một lần trong 24 giờ kể từ giờ bắt đầu, nếu không sẽ bị vô hiệu. Thời hạn mã làm tròn theo giờ. Đổi giờ đặt phòng sau khi đã tạo mã thì app báo "Mã lệch giờ" và cho tạo mã mới; mã cũ vẫn mở được cửa đến hết hạn (xóa từ xa cần gateway).
 
 ## Lịch công khai chỉ xem (build 3.4)
 
@@ -77,3 +77,10 @@ Agoda là nguồn thứ ba, dùng chung cơ chế với Airbnb và Booking: dán
 Thẻ các ngày đặt từ Airbnb, Booking trên Trang chủ có nút **Tạo mã vào cửa** (hiện khi đã kết nối khóa TTLock). Lịch iCal chỉ có ngày, nên mã hiệu lực từ 14:00 ngày nhận đến 11:00 ngày trả cộng 1 giờ (giờ Việt Nam). Mã lưu trong kho script (`EXT_CODES`, tự xóa sau khi hết hạn hơn 1 ngày), đồng bộ cho mọi máy, có nút sao chép tin nhắn để người quản lý tự gửi khách trên nền tảng. Bấm lại không tạo mã mới. Mã không có trong lịch iCal xuất và lịch công khai.
 
 Lưu ý: khách hủy đơn thì mã vẫn còn hiệu lực đến hết hạn (xóa mã từ xa cần gateway). Nên tạo mã gần ngày nhận phòng. Đổi ngày đặt phòng trên nền tảng thì mã cũ không tự đổi theo.
+
+## Build 3.7
+
+- Máy chủ không còn phụ thuộc thứ tự nạp file; thiếu `Push.gs` hoặc `OtaFinance.gs` chỉ làm các action `push*`, `ota*` trả `code: "missing"`.
+- `ttCode` (tạo mã vào cửa) không tạo trùng: bấm lại trả mã cũ. Nếu đã đổi giờ đặt phòng thì tạo mã mới, trả `replaced` và `oldCode` (mã cũ vẫn còn hiệu lực trên khóa đến hết hạn).
+- Thêm action `otaCancel` (chỉ Admin): gỡ xác nhận thu tiền nền tảng và xóa giao dịch thu tương ứng.
+- Sửa nhỏ: đọc ngày iCal giờ UTC theo giờ Việt Nam, không lưu địa chỉ iCal vào thông báo lỗi, nhận lỗi token TTLock 10003 và 10004, so sánh chữ ký/mã lịch an toàn hơn, xóa mốc thông báo khi tắt nguồn lịch.
