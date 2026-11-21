@@ -1,9 +1,10 @@
 (function(){
   'use strict';
   var TOKEN_KEY='dearsunday-push-device', READY=null, messaging=null, registration=null;
-  var section=document.createElement('div');
-  section.className='panel stack';section.id='pushPanel';
-  section.innerHTML='<h2>Thông báo đặt phòng</h2><p id="pushState">Chưa bật thông báo trên thiết bị này.</p><p class="muted">Nhận báo khi lịch nền tảng có ngày bận mới hoặc ngày không còn trong lịch. Nội dung không có tên khách, số điện thoại hay mã cửa. Lịch được đọc mỗi 30 phút.</p><p class="muted">iPhone/iPad: thêm app vào Màn hình chính từ Safari, rồi mở app từ biểu tượng đó để bật thông báo.</p><div class="bar"><button class="btn" id="pushEnable" type="button">Bật thông báo trên thiết bị này</button><button class="btn ghost" id="pushDisable" type="button" hidden>Tắt thông báo</button><button class="btn ghost" id="pushTest" type="button" hidden>Gửi thông báo thử</button><button class="btn ghost" id="pushRefresh" type="button">Xem lịch sử mới</button></div><div id="pushHistory" class="list"></div>';
+  var HIST_SHOW=5,histAll=false,histItems=[];
+  var section=document.createElement('details');
+  section.className='panel fold';section.id='pushPanel';
+  section.innerHTML='<summary><div class="st"><h3>Thông báo trên máy này</h3><div id="pushState" class="muted">Chưa bật thông báo trên thiết bị này.</div></div></summary><div class="fold-body"><p class="muted">Nhận báo khi lịch nền tảng có ngày bận mới hoặc ngày không còn trong lịch, không kèm tên khách hay mã cửa. Trên iPhone/iPad, hãy thêm app vào Màn hình chính rồi mở app từ biểu tượng đó.</p><div class="acts"><button class="btn" id="pushEnable" type="button">Bật thông báo</button><button class="btn ghost" id="pushDisable" type="button" hidden>Tắt thông báo</button><button class="btn ghost" id="pushTest" type="button" hidden>Gửi thử</button><button class="btn ghost" id="pushRefresh" type="button">Xem lịch sử mới</button></div><div id="pushHistory" class="list"></div><button class="linkbtn" id="pushMore" type="button" hidden></button></div>';
   document.querySelector('#home > .stack').appendChild(section);
   function status(t){document.getElementById('pushState').textContent=t;}
   function checked(r){if(!r||!r.ok)throw new Error(r&&r.error||'Không thực hiện được');return r;}
@@ -28,11 +29,17 @@
       return fcm;
     })().catch(function(e){READY=null;throw e;});return READY;
   }
+  function drawHistory(){
+    var items=histItems,box=document.getElementById('pushHistory'),more=document.getElementById('pushMore');
+    box.innerHTML=items.length?items.slice(0,histAll?items.length:HIST_SHOW).map(function(x){return '<div class="li"><div style="min-width:0;overflow-wrap:anywhere"><b>'+esc(x.title)+'</b> <small>'+esc(dt(x.at))+'</small><div>'+esc(x.body)+'</div></div></div>';}).join(''):'<p class="muted">Chưa có thay đổi mới. Các lượt đã có trước khi bật tính năng không tạo thông báo hàng loạt.</p>';
+    more.hidden=items.length<=HIST_SHOW;more.textContent=histAll?'Thu gọn':'Xem thêm ('+(items.length-HIST_SHOW)+')';
+  }
+  document.getElementById('pushMore').onclick=function(){histAll=!histAll;drawHistory();};
   async function refresh(){
     if(MODE!=='cloud')return;
     try{
       var r=checked(await api('pushInfo',{}));
-      document.getElementById('pushHistory').innerHTML=r.items.length?r.items.map(function(x){return '<div class="li"><div><b>'+esc(x.title)+'</b><div>'+esc(x.body)+'</div><small>'+esc(dt(x.at))+'</small></div></div>';}).join(''):'<p class="muted">Chưa có thay đổi mới. Các lượt đã có trước khi bật tính năng không tạo thông báo hàng loạt.</p>';
+      histItems=r.items||[];drawHistory();
       if(r.error)status(r.error);else status(token()&&Notification.permission==='granted'?'Đã bật trên thiết bị này.':'Chưa bật thông báo trên thiết bị này.');
       buttons();
     }catch(e){status(e.message);}
