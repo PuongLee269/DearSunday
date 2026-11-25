@@ -64,8 +64,9 @@ function pushCalendarChange_(source,old,rec) {
   if(!rec.ok)return;
   withLock_(function(){
     var p=props_(), baselineKey='PUSH_BASE_'+source, raw=p.getProperty(baselineKey);
-    var real=function(l){return (l||[]).filter(function(x){return !x[3];});};
-    var previous=raw?JSON.parse(raw):(old&&old.ok?real(old.ev):null);
+    var ign=extIgnoreMap_();
+    var real=function(l){return (l||[]).filter(function(x){return !x[3]&&!extIsIgnored_(ign,source,rec,x[0],x[1]);});}; // bỏ ngày chủ nhà đã bỏ chặn trong app
+    var previous=raw?real(JSON.parse(raw)):(old&&old.ok?real(old.ev):null);
     var current=real(rec.ev);
     // đơn cũ nay được nhận ra là bản sao: không phải "biến mất"
     var echoNow=(rec.ev||[]).filter(function(x){return x[3];}).map(function(x){return x[0]+'|'+x[1];});

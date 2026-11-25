@@ -313,4 +313,63 @@ for(const direct of [false,true]){
  e.fetch=()=>({getResponseCode:()=>200,getContentText:()=>bk.export()});
  e.ctx.capNhatLichNgoai();e.saveBk([bkApp('b1',D0,D2)]);e.ctx.capNhatLichNgoai();
  assert.equal(e.state().events.length,1);console.log('ok chỉ Code.gs');}
+// ---------- 13. ngày nhập xa hơn ~11 tháng bị bỏ ----------
+{const env=makeEnv(['Code','Push','Ota']);
+ const feed=['BEGIN:VCALENDAR','VERSION:2.0',
+   'BEGIN:VEVENT','UID:far','DTSTART;VALUE=DATE:20271126','DTEND;VALUE=DATE:20271128','SUMMARY:Airbnb (Not available)','END:VEVENT',
+   'BEGIN:VEVENT','UID:near','DTSTART;VALUE=DATE:20261231','DTEND;VALUE=DATE:20270102','SUMMARY:Airbnb (Not available)','END:VEVENT',
+   'END:VCALENDAR'].join('\r\n')+'\r\n';
+ env.ctx.props_().setProperty('EXT_SRC',JSON.stringify({airbnb:'https://air.example/a.ics'}));
+ env.fetch=()=>({getResponseCode:()=>200,getContentText:()=>feed});
+ env.ctx.capNhatLichNgoai();
+ const ev=env.state().events;
+ assert.ok(!ev.some(x=>x.s==='2027-11-26'),'sự kiện 360 ngày bị bỏ: '+JSON.stringify(ev));
+ assert.ok(ev.some(x=>x.s==='2026-12-31'),'sự kiện 30 ngày còn');
+ const ics=env.ics();
+ assert.ok(!ics.includes('20271126'),'không xuất ngày xa');
+ assert.ok(ics.includes('20261231'),'xuất ngày gần');
+ console.log('ok 13');}
+
+// ---------- 14. Bỏ chặn trong app (extIgnore) ----------
+NOW=Date.UTC(2026,10,25,3,0,0);
+{const mk=(sum,desc)=>['BEGIN:VCALENDAR','VERSION:2.0',
+   'BEGIN:VEVENT','UID:blk','DTSTART;VALUE=DATE:20261125','DTEND;VALUE=DATE:20261213','SUMMARY:'+sum,...(desc?['DESCRIPTION:'+desc]:[]),'END:VEVENT','END:VCALENDAR'].join('\r\n')+'\r\n';
+ const run=(sum,ign,desc)=>{const env=makeEnv(['Code','Push','Ota']);
+   env.ctx.props_().setProperty('EXT_SRC',JSON.stringify({airbnb:'https://air.example/a.ics',booking:'https://bk.example/b.ics'}));
+   const bkFeed=['BEGIN:VCALENDAR','VERSION:2.0','BEGIN:VEVENT','UID:r1','DTSTART;VALUE=DATE:20261201','DTEND;VALUE=DATE:20261203','SUMMARY:Reserved','END:VEVENT','END:VCALENDAR'].join('\r\n')+'\r\n';
+   env.fetch=u=>({getResponseCode:()=>200,getContentText:()=>u.indexOf('air.')>0?mk(sum,desc):bkFeed});
+   env.ctx.capNhatLichNgoai();
+   const m=env.post({action:'load',token:env.admin});
+   const d=env.data()||{prices:{sunday:{gia:850000},night:{gia:600000}},tx:[],bookings:[]};d.bookings=d.bookings||[];
+   if(ign)d.extIgnore=ign;
+   assert.equal(env.post({action:'save',token:env.admin,baseVersion:m.version,data:d}).ok,true);
+   env.ctx.capNhatLichNgoai();return env;};
+ const IG=[{src:'airbnb',s:'2026-11-25',e:'2026-12-13',by:'admin',at:1}];
+ // không có extIgnore: xuất và trùng với đơn Booking
+ let e0=run('Airbnb (Not available)');
+ assert.ok(rangesOf(e0.ics()).some(r=>r[0]==='2026-11-25'&&r[1]==='2026-12-13'));
+ assert.ok(e0.state().conflicts.length>=1,'chưa bỏ chặn thì trùng');
+ // khớp: vẫn xuất (nền tảng khác vẫn chặn), không conflicts/dupes, không cal, không OTA, state gắn cờ
+ let e1=run('Airbnb (Not available)',IG);
+ assert.ok(rangesOf(e1.ics()).some(r=>r[0]==='2026-11-25'&&r[1]==='2026-12-13'),'ngày bỏ chặn trong app vẫn gửi sang nền tảng khác');
+ assert.ok(rangesOf(e1.ics()).some(r=>r[0]==='2026-12-01'),'đơn Booking vẫn xuất');
+ assert.equal(e1.state().conflicts.length,0);assert.equal(e1.state().dupes.length,0);
+ const ev1=e1.state().events.find(x=>x.src==='airbnb');assert.equal(ev1.ignored,true);assert.ok(!ev1.real);
+ assert.ok(e1.state().events.find(x=>x.src==='booking').real,'đơn Reserved có cờ real');
+ const cal=JSON.parse(e1.ctx.doGet({parameter:{cal:'1'}}).s);assert.ok(!cal.night.includes('2026-11-26')&&cal.night.includes('2026-12-01'));
+ assert.ok(!(e1.data().otaLedger||[]).some(r=>r.source==='airbnb'),'không vào OTA');
+ // "Reserved" + extIgnore khớp: vẫn xuất
+ let e2=run('Reserved',IG);
+ assert.ok(rangesOf(e2.ics()).some(r=>r[0]==='2026-11-25'&&r[1]==='2026-12-13'),'đơn thật không bao giờ bị bỏ qua');
+ assert.ok(!e2.state().events.find(x=>x.src==='airbnb').ignored);
+ let e3=run('Airbnb (Not available)',IG,'Reservation URL: https://www.airbnb.com/hosting/reservations/details/HM1');
+ assert.ok(rangesOf(e3.ics()).some(r=>r[0]==='2026-11-25'),'Reservation URL cũng là đơn thật');
+ // lệch ngày: không tác dụng
+ let e4=run('Airbnb (Not available)',[{src:'airbnb',s:'2026-11-25',e:'2026-12-12',by:'a',at:1}]);
+ assert.ok(rangesOf(e4.ics()).some(r=>r[0]==='2026-11-25'&&r[1]==='2026-12-13'),'lệch ngày không bỏ chặn');
+ assert.ok(!e4.state().events.find(x=>x.src==='airbnb').ignored);
+ // dữ liệu cũ không có extIgnore vẫn chạy; dữ liệu không đổi qua save
+ assert.equal(e0.data().extIgnore,undefined);
+ console.log('ok 14');}
+
 console.log('PASS: check-sync-3.7');

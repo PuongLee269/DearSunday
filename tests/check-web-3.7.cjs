@@ -107,6 +107,7 @@ function fakeServer(mode, opt) {
       case 'load': {
         const ev = [{ src: 'airbnb', s: addD(10), e: addD(12) }, { src: 'booking', s: addD(14), e: addD(15) }];
         if (st.mode === 'moi' || opt.extraSrc) { ev.push({ src: 'agoda', s: addD(20), e: addD(22) }); ev.push({ src: 'vrbo', s: addD(25), e: addD(26) }); }
+        if (opt.realFlag) ev.forEach(x => { x.real = x.src === 'airbnb' ? 0 : 1; });
         const r = { ok: true, version: st.version, data: st.data, updatedAt: Date.now(), updatedBy: 'admin', tt: st.tt, extAt: 5 };
         if (!opt.noExt) r.ext = ev;
         if (opt.conflicts) r.extConflicts = opt.conflicts;
@@ -236,6 +237,43 @@ async function groupExt(browser, base, mode) {
   st = fakeServer(mode, { noExt: true });
   ({ ctx, page, errors } = await newPage(browser, base, st, { ls: { 'dearsunday-ext': '{not json' } }));
   ok(errors.length === 0, 'EXT không phải JSON: trang vẫn chạy');
+  await ctx.close();
+}
+
+async function groupIgnore(browser, base, mode) {
+  console.log('# [' + mode + '] bỏ chặn trong app');
+  for (const w of [320, 390]) {
+    const st = fakeServer(mode, { realFlag: true });
+    const { ctx, page, errors } = await newPage(browser, base, st, { w });
+    const D = addD(10);
+    const busy0 = await page.evaluate(d => dayState(d), D);
+    ok(busy0 !== 'f', 'trước khi bỏ chặn ngày Airbnb là bận (' + busy0 + ')');
+    await page.evaluate(() => { document.querySelectorAll('#upList .bkc-head').forEach(h => h.click()); });
+    ok(await page.evaluate(() => document.querySelectorAll('#upList [data-extign]').length) === 1, 'chỉ đơn Airbnb không dấu hiệu thật có nút "Bỏ chặn trong app" (đơn Booking real=1 thì không)');
+    let msg = '';
+    page.on('dialog', async d => { msg = d.message(); await d.accept(); });
+    await page.click('#upList [data-extign]'); await page.waitForTimeout(200);
+    ok(/vẫn bị chặn trên Airbnb.*coi là trống.*Tiếp tục\?/.test(msg), 'confirm đúng nội dung: ' + msg);
+    const ig = await page.evaluate(() => S.extIgnore.map(i => i.src + '|' + i.s + '|' + i.e));
+    ok(ig.length === 1 && ig[0] === 'airbnb|' + addD(10) + '|' + addD(12), 'thêm đúng mục extIgnore');
+    ok(await page.evaluate(d => dayState(d), D) === 'f', 'ngày trên lịch thành trống');
+    ok(await page.evaluate(() => extB().every(b => b.pkg !== 'airbnb')), 'không còn trong danh sách bận');
+    await page.waitForTimeout(1800);
+    ok(st.data.extIgnore && st.data.extIgnore.length === 1, 'đã lưu extIgnore lên máy chủ');
+    await page.evaluate(() => { document.querySelectorAll('.bkc.ign .bkc-head').forEach(h => { if (h.getAttribute('aria-expanded') !== 'true') h.click(); }); });
+    ok(/Đã bỏ chặn trong app/.test(await page.textContent('#upList')) && await page.evaluate(() => document.querySelectorAll('#upList .bkc.ign [data-extunign]').length) === 1, 'thẻ mờ nhãn "Đã bỏ chặn trong app" có nút "Chặn lại"');
+    ok(await overflow(page) <= 0, 'không tràn ngang ở ' + w + 'px');
+    await page.click('#upList [data-extunign]'); await page.waitForTimeout(200);
+    ok(await page.evaluate(() => S.extIgnore.length) === 0 && await page.evaluate(d => dayState(d), D) === busy0, '"Chặn lại" xóa mục và ngày bận trở lại');
+    ok(errors.length === 0, 'không lỗi JS' + errors.join('|'));
+    await ctx.close();
+  }
+  /* máy chủ cũ (không có cờ real): không hiện nút, không bỏ qua dù có mục extIgnore */
+  const st2 = fakeServer(mode, {});
+  st2.data.extIgnore = [{ src: 'airbnb', s: addD(10), e: addD(12), by: 'admin', at: 1 }];
+  const { ctx, page, errors } = await newPage(browser, base, st2);
+  ok(await page.evaluate(() => document.querySelectorAll('[data-extign]').length) === 0 && await page.evaluate(d => dayState(d), addD(10)) !== 'f', 'máy chủ không gửi cờ real: không hiện nút, không bỏ qua');
+  ok(errors.length === 0, 'không lỗi JS' + errors.join('|'));
   await ctx.close();
 }
 
@@ -644,6 +682,7 @@ async function groupPushRenew(browser, base) {
       await groupLayout(browser, base, mode);
       await groupExt(browser, base, mode);
       await groupConflicts(browser, base, mode);
+      await groupIgnore(browser, base, mode);
       await groupFinanceAndCode(browser, base, mode);
       await groupForm(browser, base, mode);
       await groupGuestCode(browser, base, mode);
