@@ -349,9 +349,9 @@ NOW=Date.UTC(2026,10,25,3,0,0);
  let e0=run('Airbnb (Not available)');
  assert.ok(rangesOf(e0.ics()).some(r=>r[0]==='2026-11-25'&&r[1]==='2026-12-13'));
  assert.ok(e0.state().conflicts.length>=1,'chưa bỏ chặn thì trùng');
- // khớp: không xuất, không conflicts/dupes, không cal, không OTA, state gắn cờ
+ // khớp: vẫn xuất (nền tảng khác vẫn chặn), không conflicts/dupes, không cal, không OTA, state gắn cờ
  let e1=run('Airbnb (Not available)',IG);
- assert.ok(!rangesOf(e1.ics()).some(r=>r[0]==='2026-11-25'),'không xuất ngày đã bỏ chặn');
+ assert.ok(rangesOf(e1.ics()).some(r=>r[0]==='2026-11-25'&&r[1]==='2026-12-13'),'ngày bỏ chặn trong app vẫn gửi sang nền tảng khác');
  assert.ok(rangesOf(e1.ics()).some(r=>r[0]==='2026-12-01'),'đơn Booking vẫn xuất');
  assert.equal(e1.state().conflicts.length,0);assert.equal(e1.state().dupes.length,0);
  const ev1=e1.state().events.find(x=>x.src==='airbnb');assert.equal(ev1.ignored,true);assert.ok(!ev1.real);

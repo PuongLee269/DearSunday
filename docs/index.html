@@ -1071,7 +1071,7 @@ function bookingRow(b){
   body+='<div class="kv">Dọn phòng xong lúc <b>'+hhmm(fmtDT(new Date((oc.e+oc.c)*60000)))+'</b> ('+oc.c+' phút)</div>';
   if(ext)body+='<div class="muted kv">Lịch lấy từ '+esc(g.ten)+', sửa ở nền tảng đó. Tính nhận 14:00, trả 11:00.</div>';
   else body+=payRow(b)+(b.note?'<div class="kv">Ghi chú: '+esc(b.note)+'</div>':'')}
-  else body+='<div class="muted kv">Ngày này vẫn bị chặn trên '+esc(g.ten)+', nhưng app coi là trống và không gửi sang các nền tảng khác.</div>';
+  else body+='<div class="muted kv">Ngày này vẫn bị chặn trên '+esc(g.ten)+' và các nền tảng khác vẫn đóng; chỉ trong app coi là trống.</div>';
   var xk=ext?esc(b.id.slice(4).replace(/:/g,'|')):'';
   body+='<div class="acts">'+(ign?'<button type="button" class="btn ghost sm" data-extunign="'+xk+'">Chặn lại</button>':payBtns(b)+codeBtns(b)+(ext&&b.real===0?'<button type="button" class="btn ghost sm" data-extign="'+xk+'">Bỏ chặn trong app</button>':'')+(ext?'<button type="button" class="btn ghost sm" data-go="fin">Đối soát</button>':'<button class="btn ghost sm" data-bkedit="'+id+'">Sửa</button><button class="btn ghost sm del'+(arm?' danger':'')+'" data-bkdel="'+id+'">'+(arm?'Bấm lại để xóa':'Xóa')+'</button>'))+'</div>';
   return '<div class="bkc'+(ign?' ign':'')+(open?' open':'')+'" data-id="'+id+'" style="--c:'+g.mau+'"><button type="button" class="bkc-head" data-card="'+id+'" aria-expanded="'+open+'"><span class="r1">'+chipGoi(b)+'<b class="nm">'+esc(ign?'Đã bỏ chặn':ext?'Khách đặt':b.name)+'</b></span>'+
@@ -1534,7 +1534,7 @@ document.addEventListener('click',function(e){
   if(d.extign){
     var xp=d.extign.split('|'),xe=cleanExt(EXT.events).filter(function(x){return extKey(x)===d.extign})[0];
     if(!xe||xe.real!==0)return;
-    if(!confirm('Ngày này vẫn bị chặn trên '+srcOf(xp[0]).ten+', nhưng app sẽ coi là trống và không gửi sang các nền tảng khác. Tiếp tục?'))return;
+    if(!confirm('Ngày này vẫn bị chặn trên '+srcOf(xp[0]).ten+' và các nền tảng khác vẫn đóng, chỉ trong app coi là trống. Tiếp tục?'))return;
     if(!Array.isArray(S.extIgnore))S.extIgnore=[];
     if(!S.extIgnore.some(function(i){return i.id===d.extign}))S.extIgnore.push({id:d.extign,src:xp[0],s:xp[1],e:xp[2],by:A.user||'',at:Date.now()});
     save();renderAll();return;

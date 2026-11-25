@@ -661,7 +661,7 @@ function icsBuild_() {
       "DTSTART;VALUE=DATE:" + icsDate_(s), "DTEND;VALUE=DATE:" + icsDate_(e), "SUMMARY:Reserved", "TRANSP:OPAQUE", "END:VEVENT");
   }
   appRanges_().forEach(function (b) { ev(String(b.id).replace(/[^A-Za-z0-9_-]/g, ""), b.s, b.e); });
-  extReal_().forEach(function (x) {
+  extReal_(true).forEach(function (x) { // ngày đã bỏ chặn trong app VẪN gửi sang nền tảng khác (chủ nhà muốn Booking vẫn đóng)
     if (x.e < cut) return;
     ev("ext-" + (EXT_ORDER.indexOf(x.src) + 1) + "-" + x.s + "-" + x.e, x.s, x.e); // mã số thay tên nguồn để không lộ tên nền tảng
   });
@@ -792,9 +792,9 @@ function extIsIgnored_(ign, id, rec, s, e) {
 }
 
 // Đơn thật từ nền tảng (bỏ bản sao và các ngày chủ nhà đã bỏ chặn trong app). Bản ghi cũ dạng [s,e] coi là đơn thật.
-function extReal_() {
+function extReal_(withIgnored) {
   var out = [];
-  var ign = extIgnoreMap_();
+  var ign = withIgnored ? {} : extIgnoreMap_();
   Object.keys(EXT_SOURCES).forEach(function (id) {
     var r = extRec_(id);
     if (r && r.ev) r.ev.forEach(function (x) { if (!x[3] && !extIsIgnored_(ign, id, r, x[0], x[1])) out.push({ src: id, s: x[0], e: x[1] }); });
