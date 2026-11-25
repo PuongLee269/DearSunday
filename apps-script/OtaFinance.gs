@@ -12,7 +12,7 @@ function otaWrite_(d,user){
 function otaCaptureData_(d){
   if(!Array.isArray(d.otaLedger))d.otaLedger=[];
   var changed=false;
-  extState_().events.forEach(function(x){
+  extState_().events.filter(function(x){return !x.ignored;}).forEach(function(x){
     var id='ota:'+x.src+':'+x.s+':'+x.e;
     if(d.otaLedger.some(function(r){return r.id===id;}))return;
     d.otaLedger.push({id:id,source:x.src,start:x.s,end:x.e,origin:'ical',createdAt:Date.now()});changed=true;
@@ -37,7 +37,7 @@ function otaInfo_(req){
   return withLock_(function(){
     var raw=readData_();if(!raw)fail_('bad','Chờ app đồng bộ dữ liệu trước khi tính tiền');
     var d=JSON.parse(raw);if(otaCaptureData_(d))otaWrite_(d,'calendar');
-    var config=otaConfig_(),active={};extState_().events.forEach(function(x){active['ota:'+x.src+':'+x.s+':'+x.e]=true;});
+    var config=otaConfig_(),active={};extState_().events.filter(function(x){return !x.ignored;}).forEach(function(x){active['ota:'+x.src+':'+x.s+':'+x.e]=true;});
     return {ok:true,config:config,rows:(d.otaLedger||[]).map(function(r){return Object.assign({},r,{inCalendar:!!active[r.id],quote:otaQuote_(r,d,config)});})};
   });
 }

@@ -431,9 +431,14 @@ function save_(req) {
     if (typeof otaProtectSave_ === "function") otaProtectSave_(req.data, JSON.parse(readData_() || '{}'));
     str = JSON.stringify(req.data);
     if (str.length > MAX_DATA_CHARS) fail_('big', 'Dữ liệu quá lớn');
+    var oldIgn = Object.keys(extIgnoreMap_()).sort().join(",");
     writeData_(str);
     var next = { version: m.version + 1, updatedAt: Date.now(), updatedBy: u.username };
     setMeta_(next);
+    if (Object.keys(extIgnoreMap_()).sort().join(",") !== oldIgn) {
+      // danh sách bỏ chặn đổi: cập nhật báo trùng/lịch xuất và báo app tải lại danh sách sự kiện nhập
+      try { props_().setProperty("EXT_AT", String(Date.now())); extConflictsUpdate_(); icsSentUpdate_(icsBuild_().keys, Date.now()); } catch (e) { console.error("Không cập nhật được sau khi đổi bỏ chặn"); }
+    }
     return { ok: true, version: next.version, updatedAt: next.updatedAt, updatedBy: next.updatedBy };
   });
 }
@@ -763,14 +768,43 @@ function parseIcs_(txt) {
   return out.slice(0, 300);
 }
 
-// Đơn thật từ nền tảng (bỏ bản sao). Bản ghi cũ dạng [s,e] coi là đơn thật.
+// Danh sách "Bỏ chặn trong app" do chủ nhà lưu trong dữ liệu đồng bộ: {src, s, e, by, at}. Dữ liệu cũ không có khóa này thì là rỗng.
+function extIgnoreMap_() {
+  var m = {};
+  var raw = readData_();
+  if (!raw) return m;
+  var list = [];
+  try { list = JSON.parse(raw).extIgnore; } catch (err) {}
+  if (!Array.isArray(list)) return m;
+  list.forEach(function (x) { if (x && x.src && x.s && x.e) m[x.src + "|" + x.s + "|" + x.e] = 1; });
+  return m;
+}
+
+// Sự kiện nhập có dấu hiệu đơn thật (Airbnb "Reserved"/Reservation URL). Bản ghi cũ chưa có rec.sig: coi là đơn thật (an toàn).
+function extHasSignal_(rec, s, e) {
+  if (!rec || !Array.isArray(rec.sig)) return true;
+  return rec.sig.indexOf(s + "|" + e) >= 0;
+}
+
+// Bị bỏ qua = khớp ĐÚNG một mục extIgnore và không có dấu hiệu đơn thật.
+function extIsIgnored_(ign, id, rec, s, e) {
+  return !!ign[id + "|" + s + "|" + e] && !extHasSignal_(rec, s, e);
+}
+
+// Đơn thật từ nền tảng (bỏ bản sao và các ngày chủ nhà đã bỏ chặn trong app). Bản ghi cũ dạng [s,e] coi là đơn thật.
 function extReal_() {
   var out = [];
+  var ign = extIgnoreMap_();
   Object.keys(EXT_SOURCES).forEach(function (id) {
     var r = extRec_(id);
-    if (r && r.ev) r.ev.forEach(function (x) { if (!x[3]) out.push({ src: id, s: x[0], e: x[1] }); });
+    if (r && r.ev) r.ev.forEach(function (x) { if (!x[3] && !extIsIgnored_(ign, id, r, x[0], x[1])) out.push({ src: id, s: x[0], e: x[1] }); });
   });
   return out;
+}
+
+// Sự kiện nhập đang tính là bận (không gồm bản sao, không gồm ngày đã bỏ chặn trong app).
+function extActive_() {
+  return extState_().events.filter(function (x) { return !x.ignored; });
 }
 
 function fetchExt_() {
@@ -794,13 +828,13 @@ function fetchExt_() {
       var body = r.getContentText();
       if (code !== 200) rec.err = "Nền tảng trả về mã " + code;
       else if (body.indexOf("BEGIN:VCALENDAR") < 0) rec.err = "Địa chỉ này không phải lịch iCal";
-      else { rec.ok = true; raw = parseIcs_(body); }
+      else { rec.ok = true; raw = parseIcs_(body); rec.sig = raw.filter(function (x) { return x[2]; }).map(function (x) { return x[0] + "|" + x[1]; }); }
     } catch (err) {
       // Không lưu thông điệp lỗi gốc: có thể chứa địa chỉ iCal bí mật.
       rec.err = "Không tải được lịch";
     }
     if (!rec.ok) {
-      if (old && old.ev) rec.ev = old.ev; // lỗi tạm thời thì giữ lịch lần trước
+      if (old && old.ev) { rec.ev = old.ev; if (old.sig) rec.sig = old.sig; } // lỗi tạm thời thì giữ lịch lần trước
     } else {
       // sự kiện đã biết giữ nguyên cờ (echo/mirror giữ đến khi sự kiện biến mất); sự kiện mới: 0 = đơn thật, null = chưa xét
       var prev = {};
@@ -933,12 +967,15 @@ function extCodes_() {
 function extState_() {
   var events = [];
   var codes = extCodes_();
+  var ign = extIgnoreMap_();
   Object.keys(EXT_SOURCES).forEach(function (id) {
     var r = extRec_(id);
     if (r && r.ev) r.ev.forEach(function (x) {
       if (x[3]) return; // bản sao (echo/mirror): app không thấy
       var ev = { src: id, s: x[0], e: x[1] };
-      var c = codes[id + "|" + x[0] + "|" + x[1]];
+      ev.real = extHasSignal_(r, x[0], x[1]) ? 1 : 0;
+      if (extIsIgnored_(ign, id, r, x[0], x[1])) ev.ignored = true;
+      var c = ev.ignored ? null : codes[id + "|" + x[0] + "|" + x[1]];
       if (c) { ev.code = c.code; ev.codeFrom = c.from; ev.codeTo = c.to; }
       events.push(ev);
     });
@@ -1262,7 +1299,7 @@ function cal_() {
     if (CAL_NIGHT_PKGS[b.pkg] && e > s) calDays_(s, e).forEach(function (d) { night[d] = 1; });
     else day[s] = 1;
   });
-  extState_().events.forEach(function (x) {
+  extActive_().forEach(function (x) {
     calDays_(x.s, x.e).forEach(function (d) { night[d] = 1; });
   });
   var keep = function (o) {
@@ -1284,7 +1321,7 @@ function ttCodeExt_(req) {
   if (!EXT_SOURCES[src] || !/^\d{4}-\d{2}-\d{2}$/.test(s) || !/^\d{4}-\d{2}-\d{2}$/.test(e)) fail_("bad", "Thiếu thông tin đặt phòng");
   var key = src + "|" + s + "|" + e;
   return withLock_(function () {
-    var known = extState_().events.some(function (x) { return x.src === src && x.s === s && x.e === e; });
+    var known = extActive_().some(function (x) { return x.src === src && x.s === s && x.e === e; });
     if (!known) fail_("bad", "Đợt đặt này không còn trong lịch " + EXT_SOURCES[src] + ". Hãy cập nhật lịch rồi thử lại.");
     var codes = extCodes_();
     if (codes[key]) return { ok: true, code: codes[key].code, from: codes[key].from, to: codes[key].to, existed: true };
